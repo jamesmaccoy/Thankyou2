@@ -7,6 +7,9 @@ import { getPayload } from 'payload'
 import { draftMode } from 'next/headers'
 import React, { cache } from 'react'
 import RichText from '@/components/RichText'
+import { EstimateBlock } from '@/blocks/EstimateBlock/Component'
+
+
 
 import type { Post } from '@/payload-types'
 
@@ -62,6 +65,7 @@ export default async function Post({ params: paramsPromise }: Args) {
 
       <div className="flex flex-col items-center gap-4 pt-8">
         <div className="container">
+          <EstimateBlock blockType="stayDuration" postId={post.id} baseRate={150} />
           <RichText className="max-w-[48rem] mx-auto" data={post.content} enableGutter={false} />
           {post.relatedPosts && post.relatedPosts.length > 0 && (
             <RelatedPosts

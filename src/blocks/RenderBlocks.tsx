@@ -7,7 +7,7 @@ import { CallToActionBlock } from '@/blocks/CallToAction/Component'
 import { ContentBlock } from '@/blocks/Content/Component'
 import { FormBlock } from '@/blocks/Form/Component'
 import { MediaBlock } from '@/blocks/MediaBlock/Component'
-import { StayDuration } from '@/blocks/StayDuration/Component'
+import { EstimateBlock } from '@/blocks/EstimateBlock/Component'
 
 const blockComponents = {
   archive: ArchiveBlock,
@@ -15,7 +15,7 @@ const blockComponents = {
   cta: CallToActionBlock,
   formBlock: FormBlock,
   mediaBlock: MediaBlock,
-  stayDuration: StayDuration,
+  stayDuration: EstimateBlock,
 }
 
 export const RenderBlocks: React.FC<{

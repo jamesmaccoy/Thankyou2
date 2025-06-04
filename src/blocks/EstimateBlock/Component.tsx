@@ -11,6 +11,7 @@ import type { SelectSingleEventHandler } from 'react-day-picker'
 import type { EstimateBlockType } from './types'
 import { useUserContext } from '@/context/UserContext'
 import { useSubscription } from '@/hooks/useSubscription'
+import { RenderBlocks } from '@/blocks/RenderBlocks'
 
 import { calculateTotal } from '@/lib/calculateTotal'
 
@@ -76,7 +77,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   const [currentTier, setCurrentTier] = useState(packageTiers[0])
   const { currentUser } = useUserContext()
   const { isSubscribed } = useSubscription()
-  const isCustomer = currentUser?.role?.includes('customer')
+  const isCustomer = !!currentUser
   const canSeeDiscount = isCustomer && isSubscribed
   const packageTotal = calculateTotal(effectiveBaseRate, selectedDuration, currentTier.multiplier)
   const baseTotal = calculateTotal(effectiveBaseRate, selectedDuration, 1)
@@ -210,6 +211,10 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         disabled={!startDate || !endDate}
         onClick={async () => {
           if (!startDate || !endDate) return;
+          if (!currentUser?.id) {
+            alert('You must be logged in to request an estimate.');
+            return;
+          }
           const res = await fetch('/api/estimates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

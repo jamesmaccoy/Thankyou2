@@ -217,6 +217,16 @@ export const Posts: CollectionConfig<'posts'> = {
         },
       ],
     },
+    {
+      name: 'baseRate',
+      type: 'number',
+      label: 'Base Rate (per night)',
+      required: false,
+      min: 0,
+      admin: {
+        position: 'sidebar',
+      },
+    },
     ...slugField(),
   ],
   hooks: {

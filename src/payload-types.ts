@@ -72,6 +72,8 @@ export interface Config {
     media: Media;
     categories: Category;
     users: User;
+    bookings: Booking;
+    estimates: Estimate;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -88,6 +90,8 @@ export interface Config {
     media: MediaSelect<false> | MediaSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
+    bookings: BookingsSelect<false> | BookingsSelect<true>;
+    estimates: EstimatesSelect<false> | EstimatesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -248,6 +252,7 @@ export interface Post {
         name?: string | null;
       }[]
     | null;
+  baseRate?: number | null;
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -729,6 +734,46 @@ export interface Form {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "bookings".
+ */
+export interface Booking {
+  id: string;
+  title: string;
+  customer?: (string | null) | User;
+  token: string;
+  guests?: (string | User)[] | null;
+  slug?: string | null;
+  slugLock?: boolean | null;
+  post: string | Post;
+  paymentStatus?: ('paid' | 'unpaid') | null;
+  fromDate: string;
+  toDate: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "estimates".
+ */
+export interface Estimate {
+  id: string;
+  title: string;
+  customer?: (string | null) | User;
+  token?: string | null;
+  guests?: (string | User)[] | null;
+  total: number;
+  slug?: string | null;
+  slugLock?: boolean | null;
+  post: string | Post;
+  paymentStatus?: ('paid' | 'unpaid') | null;
+  fromDate: string;
+  toDate: string;
+  packageType?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
 export interface Redirect {
@@ -919,6 +964,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'users';
         value: string | User;
+      } | null)
+    | ({
+        relationTo: 'bookings';
+        value: string | Booking;
+      } | null)
+    | ({
+        relationTo: 'estimates';
+        value: string | Estimate;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1142,6 +1195,7 @@ export interface PostsSelect<T extends boolean = true> {
         id?: T;
         name?: T;
       };
+  baseRate?: T;
   slug?: T;
   slugLock?: T;
   updatedAt?: T;
@@ -1276,6 +1330,44 @@ export interface UsersSelect<T extends boolean = true> {
   hash?: T;
   loginAttempts?: T;
   lockUntil?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "bookings_select".
+ */
+export interface BookingsSelect<T extends boolean = true> {
+  title?: T;
+  customer?: T;
+  token?: T;
+  guests?: T;
+  slug?: T;
+  slugLock?: T;
+  post?: T;
+  paymentStatus?: T;
+  fromDate?: T;
+  toDate?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "estimates_select".
+ */
+export interface EstimatesSelect<T extends boolean = true> {
+  title?: T;
+  customer?: T;
+  token?: T;
+  guests?: T;
+  total?: T;
+  slug?: T;
+  slugLock?: T;
+  post?: T;
+  paymentStatus?: T;
+  fromDate?: T;
+  toDate?: T;
+  packageType?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

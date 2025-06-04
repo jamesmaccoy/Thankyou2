@@ -51,6 +51,7 @@ export const RevenueCatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY,
           userId
         )
+        console.log('Purchases instance:', purchases)
         
         setIsInitialized(true)
 
