@@ -79,7 +79,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   const { isSubscribed } = useSubscription()
   const isCustomer = !!currentUser
   const canSeeDiscount = isCustomer && isSubscribed
-  const packageTotal = calculateTotal(effectiveBaseRate, selectedDuration, currentTier.multiplier)
+  const packageTotal = calculateTotal(effectiveBaseRate, selectedDuration, (currentTier?.multiplier ?? 1))
   const baseTotal = calculateTotal(effectiveBaseRate, selectedDuration, 1)
 
   useEffect(() => {
@@ -90,7 +90,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       // Find the appropriate package tier
       const tier = packageTiers.find(tier => 
         diffDays >= tier.minNights && diffDays <= tier.maxNights
-      ) || packageTiers[0]
+      ) ?? packageTiers[0]
 
       setSelectedDuration(diffDays)
       setCurrentTier(tier)
@@ -165,7 +165,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       <div className="space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">Package:</span>
-          <span className="font-medium">{currentTier.title}</span>
+          <span className="font-medium">{currentTier?.title ?? packageTiers[0].title}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-xs text-muted-foreground">Property Slug:</span>
@@ -180,14 +180,14 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
           <span className="font-medium">{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
         </div>
         {/* Discount preview for non-subscribers */}
-        {currentTier.multiplier !== 1 && (
+        {currentTier?.multiplier !== 1 && (
           <div className="flex justify-between items-center text-green-600">
             <span className="text-sm">Discount:</span>
-            <span className="font-medium">{((1 - currentTier.multiplier) * 100).toFixed(0)}% off</span>
+            <span className="font-medium">{((1 - (currentTier?.multiplier ?? 1)) * 100).toFixed(0)}% off</span>
           </div>
         )}
         {/* Show locked package total for non-subscribers */}
-        {currentTier.multiplier !== 1 && !canSeeDiscount && (
+        {currentTier?.multiplier !== 1 && !canSeeDiscount && (
           <div className="flex justify-between items-center text-gray-500">
             <span className="text-sm">With subscription:</span>
             <span className="font-medium">R{packageTotal.toFixed(2)} <span className="ml-2 text-xs">(Login & subscribe to unlock)</span></span>
@@ -220,8 +220,8 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               postId,
-              fromDate: startDate,
-              toDate: endDate,
+              fromDate: startDate.toISOString(),
+              toDate: endDate.toISOString(),
               guests: [], // or your guests data
               total: canSeeDiscount ? packageTotal : baseTotal,
               customer: currentUser?.id,
@@ -231,7 +231,8 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             const estimate = await res.json();
             window.location.href = `/estimate/${estimate.id}`;
           } else {
-            alert('Failed to create estimate');
+            const errorText = await res.text();
+            alert('Failed to create estimate: ' + errorText);
           }
         }}
       >
