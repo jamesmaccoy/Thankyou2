@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import React from 'react'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useUserContext } from '@/context/UserContext'
+import Link from 'next/link'
 
 interface AdminLinkProps {
   children: React.ReactNode
@@ -32,8 +33,8 @@ export const AdminLink: React.FC<AdminLinkProps> = ({ children, className }) => 
   }
 
   return (
-    <a href="/admin" onClick={handleClick} className={className}>
+    <Link href="/admin" onClick={handleClick} className={className}>
       {children}
-    </a>
+    </Link>
   )
 } 

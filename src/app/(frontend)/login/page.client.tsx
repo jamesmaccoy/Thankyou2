@@ -15,6 +15,10 @@ type FormValues = {
   password: string
 }
 
+type PageProps = {
+  searchParams: { [key: string]: string | string[] | undefined }
+}
+
 function LoginForm() {
   const form = useForm<FormValues>({
     defaultValues: {
@@ -60,9 +64,9 @@ function LoginForm() {
       } else {
         router.push('/bookings')
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      setError(err.message)
+      setError(err instanceof Error ? err.message : 'An error occurred')
     }
   }
 

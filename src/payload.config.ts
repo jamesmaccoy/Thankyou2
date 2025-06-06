@@ -19,7 +19,7 @@ import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
 import { Booking } from './collections/Bookings'
 import { Estimate } from './collections/Estimates'
-import analyticsRouter from '@/app/api/analytics/route'
+//import analyticsRouter from '@/app/api/analytics/route'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)

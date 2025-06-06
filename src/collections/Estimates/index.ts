@@ -35,10 +35,10 @@ export const Estimate: CollectionConfig = {
           )
         }
 
-        const estimateId =
+        const _estimateId =
           req.routeParams && 'estimateId' in req.routeParams && req.routeParams.estimateId
 
-        if (!estimateId || typeof estimateId !== 'string') {
+        if (!_estimateId || typeof _estimateId !== 'string') {
           return Response.json(
             {
               message: 'Estimate ID not provided',
@@ -51,7 +51,7 @@ export const Estimate: CollectionConfig = {
           // Use findOneAndUpdate to handle concurrent requests
           const estimate = await req.payload.findByID({
             collection: 'estimates',
-            id: estimateId,
+            id: _estimateId,
           })
 
           if (!estimate) {
@@ -94,7 +94,7 @@ export const Estimate: CollectionConfig = {
           // Update estimate with new token
           await req.payload.update({
             collection: 'estimates',
-            id: estimateId,
+            id: _estimateId,
             data: {
               token,
             },
@@ -129,10 +129,10 @@ export const Estimate: CollectionConfig = {
           )
         }
 
-        const estimateId =
+        const _estimateId =
           req.routeParams && 'estimateId' in req.routeParams && req.routeParams.estimateId
 
-        if (!estimateId || typeof estimateId !== 'string') {
+        if (!_estimateId || typeof _estimateId !== 'string') {
           return Response.json(
             {
               message: 'Estimate ID not provided',
@@ -141,9 +141,9 @@ export const Estimate: CollectionConfig = {
           )
         }
 
-        const token = req.routeParams && 'token' in req.routeParams && req.routeParams.token
+        const _token = req.routeParams && 'token' in req.routeParams && req.routeParams.token
 
-        if (!token || typeof token !== 'string') {
+        if (!_token || typeof _token !== 'string') {
           return Response.json(
             {
               message: 'Token not provided',
@@ -158,12 +158,12 @@ export const Estimate: CollectionConfig = {
             and: [
               {
                 id: {
-                  equals: estimateId,
+                  equals: _estimateId,
                 },
               },
               {
                 token: {
-                  equals: token,
+                  equals: _token,
                 },
               },
             ],
@@ -207,7 +207,7 @@ export const Estimate: CollectionConfig = {
 
         await req.payload.update({
           collection: 'estimates',
-          id: estimateId,
+          id: _estimateId,
           data: {
             guests: [...(estimate.guests || []), req.user.id],
           },
@@ -222,29 +222,29 @@ export const Estimate: CollectionConfig = {
   access: {
     create: ({ req: { user } }) => {
       if (!user) return false
-      const roles = user.role || []
+      const roles = (user as any).role || []
       return roles.includes('admin') || roles.includes('customer')
     },
     read: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
+      if ((user as any).role?.includes('admin')) return true
+      if ((user as any).role?.includes('customer')) {
         return { customer: { equals: user.id } }
       }
       return false
     },
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
+      if ((user as any).role?.includes('admin')) return true
+      if ((user as any).role?.includes('customer')) {
         return { customer: { equals: user.id } }
       }
       return false
     },
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
+      if ((user as any).role?.includes('admin')) return true
+      if ((user as any).role?.includes('customer')) {
         return { customer: { equals: user.id } }
       }
       return false
@@ -264,11 +264,7 @@ export const Estimate: CollectionConfig = {
       name: 'customer',
       type: 'relationship',
       relationTo: 'users',
-      filterOptions: {
-        role: {
-          equals: 'customer',
-        },
-      },
+      required: true,
       access: {
         update: isAdminField,
       },
