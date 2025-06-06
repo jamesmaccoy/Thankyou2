@@ -35,10 +35,10 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const _bookingId =
+        const bookingId =
           req.routeParams && 'bookingId' in req.routeParams && req.routeParams.bookingId
 
-        if (!_bookingId || typeof _bookingId !== 'string') {
+        if (!bookingId || typeof bookingId !== 'string') {
           return Response.json(
             {
               message: 'Booking ID not provided',
@@ -51,7 +51,7 @@ export const Booking: CollectionConfig = {
           // Use findOneAndUpdate to handle concurrent requests
           const booking = await req.payload.findByID({
             collection: 'bookings',
-            id: _bookingId,
+            id: bookingId,
           })
 
           if (!booking) {
@@ -94,7 +94,7 @@ export const Booking: CollectionConfig = {
           // Update booking with new token
           await req.payload.update({
             collection: 'bookings',
-            id: _bookingId,
+            id: bookingId,
             data: {
               token,
             },
@@ -130,11 +130,11 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const _bookingId =
+        const bookingId =
           req.routeParams && 'bookingId' in req.routeParams && req.routeParams.bookingId
 
         // This is not supposed to happen, but just in case
-        if (!_bookingId || typeof _bookingId !== 'string') {
+        if (!bookingId || typeof bookingId !== 'string') {
           return Response.json(
             {
               message: 'Booking ID not provided',
@@ -149,7 +149,7 @@ export const Booking: CollectionConfig = {
             and: [
               {
                 id: {
-                  equals: _bookingId,
+                  equals: bookingId,
                 },
               },
               {
@@ -191,7 +191,7 @@ export const Booking: CollectionConfig = {
 
         await req.payload.update({
           collection: 'bookings',
-          id: _bookingId,
+          id: bookingId,
           data: {
             token,
           },
@@ -217,11 +217,11 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const _bookingId =
+        const bookingId =
           req.routeParams && 'bookingId' in req.routeParams && req.routeParams.bookingId
 
         // This is not suppossed to happen, but just in case
-        if (!_bookingId || typeof _bookingId !== 'string') {
+        if (!bookingId || typeof bookingId !== 'string') {
           return Response.json(
             {
               message: 'Booking ID not provided',
@@ -230,10 +230,10 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const _token = req.routeParams && 'token' in req.routeParams && req.routeParams.token
+        const token = req.routeParams && 'token' in req.routeParams && req.routeParams.token
 
         // This is not suppossed to happen, but just in case
-        if (!_token || typeof _token !== 'string') {
+        if (!token || typeof token !== 'string') {
           return Response.json(
             {
               message: 'Token not provided',
@@ -248,12 +248,12 @@ export const Booking: CollectionConfig = {
             and: [
               {
                 id: {
-                  equals: _bookingId,
+                  equals: bookingId,
                 },
               },
               {
                 token: {
-                  equals: _token,
+                  equals: token,
                 },
               },
             ],
@@ -297,7 +297,7 @@ export const Booking: CollectionConfig = {
 
         await req.payload.update({
           collection: 'bookings',
-          id: _bookingId,
+          id: bookingId,
           data: {
             guests: [...(booking.guests || []), req.user.id],
           },
@@ -324,10 +324,10 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const _token = req.routeParams && 'token' in req.routeParams && req.routeParams.token
+        const token = req.routeParams && 'token' in req.routeParams && req.routeParams.token
 
         // This is not suppossed to happen, but just in case
-        if (!_token || typeof _token !== 'string') {
+        if (!token || typeof token !== 'string') {
           return Response.json(
             {
               message: 'Token not provided',
@@ -336,7 +336,7 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const payload = verifyJwtToken(_token)
+        const payload = verifyJwtToken(token)
 
         return Response.json(payload)
       },
@@ -356,11 +356,11 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const _bookingId =
+        const bookingId =
           req.routeParams && 'bookingId' in req.routeParams && req.routeParams.bookingId
 
         // This is not suppossed to happen, but just in case
-        if (!_bookingId || typeof _bookingId !== 'string') {
+        if (!bookingId || typeof bookingId !== 'string') {
           return Response.json(
             {
               message: 'Booking ID not provided',
@@ -369,10 +369,10 @@ export const Booking: CollectionConfig = {
           )
         }
 
-        const _guestId = req.routeParams && 'guestId' in req.routeParams && req.routeParams.guestId
+        const guestId = req.routeParams && 'guestId' in req.routeParams && req.routeParams.guestId
 
         // This is not suppossed to happen, but just in case
-        if (!_guestId || typeof _guestId !== 'string') {
+        if (!guestId || typeof guestId !== 'string') {
           return Response.json(
             {
               message: 'Guest ID not provided',
@@ -387,12 +387,12 @@ export const Booking: CollectionConfig = {
             and: [
               {
                 id: {
-                  equals: _bookingId,
+                  equals: bookingId,
                 },
               },
               {
                 guests: {
-                  contains: _guestId,
+                  contains: guestId,
                 },
               },
               {
@@ -428,10 +428,10 @@ export const Booking: CollectionConfig = {
 
         await req.payload.update({
           collection: 'bookings',
-          id: _bookingId,
+          id: bookingId,
           data: {
             guests: booking.guests.filter((guest) =>
-              typeof guest === 'string' ? guest !== _guestId : guest.id !== _guestId,
+              typeof guest === 'string' ? guest !== guestId : guest.id !== guestId,
             ),
           },
         })

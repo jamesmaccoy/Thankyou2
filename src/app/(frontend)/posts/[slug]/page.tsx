@@ -54,7 +54,7 @@ export default async function Post({ params: paramsPromise }: Args) {
 
   return (
     <article className="pt-16 pb-16">
-     
+      <PageClient page={post} draft={draft} url={url} baseRate={post.baseRate ?? 150} />
 
       {/* Allows redirects for valid pages too */}
       <PayloadRedirects disableNotFound url={url} />
@@ -65,7 +65,7 @@ export default async function Post({ params: paramsPromise }: Args) {
 
       <div className="flex flex-col items-center gap-4 pt-8">
         <div className="container">
-        <EstimateBlock postId={post.id} blockType="stayDuration" baseRate={typeof post.baseRate === 'number' ? post.baseRate : 0} />
+          <EstimateBlock blockType="stayDuration" postId={post.id} baseRate={post.baseRate ?? 150} />
           <RichText className="max-w-[48rem] mx-auto" data={post.content} enableGutter={false} />
           {post.relatedPosts && post.relatedPosts.length > 0 && (
             <RelatedPosts

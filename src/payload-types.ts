@@ -350,7 +350,7 @@ export interface Category {
 export interface Estimate {
   id: string;
   title: string;
-  customer: string | User;
+  customer?: (string | null) | User;
   token?: string | null;
   guests?: (string | User)[] | null;
   total: number;

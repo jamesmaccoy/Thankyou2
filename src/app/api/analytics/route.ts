@@ -18,8 +18,8 @@ export async function GET() {
     try {
       credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON)
       console.log('Service Account Email:', credentials.client_email)
-    } catch (_e) {
-      throw new Error(`Error parsing GOOGLE_SERVICE_ACCOUNT_JSON: ${_e instanceof Error ? _e.message : String(_e)}`)
+    } catch (e) {
+      throw new Error(`Error parsing GOOGLE_SERVICE_ACCOUNT_JSON: ${e.message}`)
     }
 
     const auth = new google.auth.GoogleAuth({

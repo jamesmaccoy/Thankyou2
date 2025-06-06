@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get('slug')
   const payload = await getPayload({ config: configPromise })
 
-  const where: any[] = []
+  let where: any[] = []
 
   if (slug) {
     // First, resolve the post by slug to get its ID

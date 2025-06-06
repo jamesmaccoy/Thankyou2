@@ -47,11 +47,11 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   //     : 'N/A'
   // )
   // Instead, calculate duration and use a fallback for total
-  const _bookingDuration = data?.fromDate && data?.toDate
+  const bookingDuration = data?.fromDate && data?.toDate
     ? Math.max(1, Math.round((new Date(data.toDate).getTime() - new Date(data.fromDate).getTime()) / (1000 * 60 * 60 * 24)))
     : 1;
-  const _bookingTotal = data?.total ?? 0;
-  const _postId = typeof data?.post === 'object' && data?.post?.id ? data.post.id : ''
+  const bookingTotal = data?.total ?? 0;
+  const postId = typeof data?.post === 'object' && data?.post?.id ? data.post.id : ''
 
   const [guests, setGuests] = useState<User[]>(Array.isArray(data.guests) ? data.guests.filter(g => typeof g !== 'string') as User[] : [])
   const [loading, setLoading] = useState(false)
@@ -65,7 +65,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const [paymentSuccess, setPaymentSuccess] = useState(false)
 
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null)
-  const [selectedDuration, setSelectedDuration] = useState<number>(typeof _bookingDuration === 'number' ? _bookingDuration : 1)
+  const [selectedDuration, setSelectedDuration] = useState<number>(typeof bookingDuration === 'number' ? bookingDuration : 1)
   const [isWineSelected, setIsWineSelected] = useState(false)
   const [packagePrice, setPackagePrice] = useState<number | null>(null)
 
@@ -248,9 +248,9 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
 
   // Determine package based on duration and wine selection
   useEffect(() => {
-    if (!_bookingDuration) return
+    if (!bookingDuration) return
 
-    const duration = Number(_bookingDuration)
+    const duration = Number(bookingDuration)
     let packageId = "per_night"
 
     // If wine package is selected, use the corresponding luxury package
@@ -280,7 +280,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
 
     setSelectedPackage(packageId)
     setSelectedDuration(duration)
-  }, [_bookingDuration, isWineSelected])
+  }, [bookingDuration, isWineSelected])
 
   // Load RevenueCat offerings when initialized
   useEffect(() => {
@@ -326,18 +326,18 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         const calculatedPrice = basePrice * multiplier
         setPackagePrice(calculatedPrice)
       } else {
-        const basePrice = Number(_bookingTotal)
+        const basePrice = Number(bookingTotal)
         const multiplier = selectedPackageDetails.multiplier
         const calculatedPrice = basePrice * multiplier
         setPackagePrice(calculatedPrice)
       }
     } else {
-      const basePrice = Number(_bookingTotal)
+      const basePrice = Number(bookingTotal)
       const multiplier = selectedPackageDetails.multiplier
       const calculatedPrice = basePrice * multiplier
       setPackagePrice(calculatedPrice)
     }
-  }, [selectedPackage, offerings, _bookingTotal])
+  }, [selectedPackage, offerings, bookingTotal])
 
   const calculateTotalPrice = () => {
     if (!packagePrice || !selectedDuration) return null
@@ -376,7 +376,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         const fromDate = new Date(data.fromDate)
         const toDate = new Date(data.toDate)
         const estimateData = {
-          postId: _postId,
+          postId: postId,
           fromDate: fromDate.toISOString(),
           toDate: toDate.toISOString(),
           guests: [],
@@ -465,8 +465,8 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           {/* --- Summary Header Section --- */}
           <div className="pt-12 pb-6">
             <div className="bg-muted p-6 rounded-lg border border-border mb-6 text-center">
-              <h2 className="text-3xl font-semibold mb-2">R{_bookingTotal}</h2>
-              <p className="text-lg text-muted-foreground">Total for {_bookingDuration} nights</p>
+              <h2 className="text-3xl font-semibold mb-2">R{bookingTotal}</h2>
+              <p className="text-lg text-muted-foreground">Total for {bookingDuration} nights</p>
             </div>
           </div>
 
@@ -667,14 +667,14 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
             <div className="flex justify-between items-center mb-6">
               <span className="text-muted-foreground">Total:</span>
               <span className="text-2xl font-bold">
-                {formatPrice(_bookingTotal)}
+                {formatPrice(bookingTotal)}
               </span>
             </div>
             {/* Complete Estimate Button */}
             <Button
               onClick={handleEstimate}
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={paymentLoading || paymentSuccess || !_postId || !selectedPackage}
+              disabled={paymentLoading || paymentSuccess || !postId || !selectedPackage}
             >
               {paymentLoading ? (
                 <>
@@ -683,15 +683,15 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 </>
               ) : paymentSuccess ? (
                 "Estimate Confirmed!"
-              ) : !_postId ? (
+              ) : !postId ? (
                 "Missing Property Information"
               ) : !selectedPackage ? (
                 "Please Select a Package"
               ) : (
-                `Complete Estimate - ${formatPrice(_bookingTotal)}`
+                `Complete Estimate - ${formatPrice(bookingTotal)}`
               )}
             </Button>
-            {!_postId && (
+            {!postId && (
               <p className="text-red-500 text-sm mt-2">
                 Property information is missing. Please start from the property page.
               </p>

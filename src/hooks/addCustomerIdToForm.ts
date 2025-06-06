@@ -12,6 +12,6 @@ export const addCustomerToForm =
       data.customer = user?.id
     }
 
-    console.log('customer:', data?.customer)
+    console.log(data)
     return data
   }
