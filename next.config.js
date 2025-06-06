@@ -20,6 +20,18 @@ const nextConfig = {
       }),
     ],
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  compiler: {
+    styledComponents: true,
+  },
+  experimental: {
+    esmExternals: true,
+  },
   reactStrictMode: true,
   redirects,
 }

@@ -12,6 +12,7 @@ import { RenderHero } from '@/heros/RenderHero'
 import { generateMeta } from '@/utilities/generateMeta'
 import PageClient from './page.client'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
+import type { Page } from '@/payload-types'
 
 export async function generateStaticParams() {
   const payload = await getPayload({ config: configPromise })
@@ -48,34 +49,84 @@ export default async function Page({ params: paramsPromise }: Args) {
   const { slug = 'home' } = await paramsPromise
   const url = '/' + slug
 
-  let page: RequiredDataFromCollectionSlug<'pages'> | null
+  let page: Page | null = null
+  let baseRate: number | undefined
 
-  page = await queryPageBySlug({
-    slug,
-  })
+  try {
+    const payload = await getPayload({ config: configPromise })
+    const result = await payload.find({
+      collection: 'pages',
+      where: {
+        slug: {
+          equals: slug,
+        },
+      },
+      draft: draft,
+      limit: 1,
+    })
 
-  // Remove this code once your website is seeded
-  if (!page && slug === 'home') {
-    page = homeStatic
+    page = result.docs[0]
+    if (page) {
+      baseRate = page.baseRate
+    }
+  } catch (error) {
+    console.error('Error fetching page:', error)
+    page = null
   }
 
   if (!page) {
-    return <PayloadRedirects url={url} />
+    return null
   }
 
-  const { hero, layout } = page
+  // Ensure we have all required fields
+  const safePage: Page = {
+    id: page.id,
+    title: page.title || '',
+    hero: {
+      type: page.hero?.type || 'none',
+      richText: page.hero?.richText || {
+        root: {
+          type: 'paragraph',
+          children: [],
+          direction: null,
+          format: '',
+          indent: 0,
+          version: 1,
+        },
+      },
+      links: page.hero?.links || [],
+      media: page.hero?.media || null,
+    },
+    layout: page.layout || [],
+    meta: {
+      title: page.meta?.title || page.title || '',
+      description: page.meta?.description || '',
+      image: page.meta?.image || null,
+    },
+    slug: page.slug || slug,
+    slugLock: page.slugLock || false,
+    updatedAt: page.updatedAt || new Date().toISOString(),
+    createdAt: page.createdAt || new Date().toISOString(),
+    _status: page._status || 'published',
+  }
+
+  const metaTags = generateMeta({
+    doc: safePage
+  })
 
   return (
-    <article className="pt-16 pb-24">
-      <PageClient />
-      {/* Allows redirects for valid pages too */}
-      <PayloadRedirects disableNotFound url={url} />
-
-      {draft && <LivePreviewListener />}
-
-      <RenderHero {...hero} />
-      <RenderBlocks blocks={layout} />
-    </article>
+    <>
+      <PayloadRedirects url={url} />
+      <LivePreviewListener />
+      <PageClient
+        page={safePage}
+        draft={draft}
+        url={url}
+        baseRate={baseRate}
+      />
+      {safePage.hero && <RenderHero {...safePage.hero} />}
+      <RenderBlocks blocks={[safePage.layout]} />
+    </>
   )
 }
 
