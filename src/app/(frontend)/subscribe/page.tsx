@@ -15,10 +15,34 @@ export default function SubscribePage() {
   const [offerings, setOfferings] = useState<Package[]>([])
   const [loadingOfferings, setLoadingOfferings] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isPurchasesConfigured, setIsPurchasesConfigured] = useState(false)
 
   useEffect(() => {
-    loadOfferings()
-  }, [])
+    const configureAndLoadOfferings = async () => {
+      setLoadingOfferings(true)
+      try {
+        if (!isPurchasesConfigured) {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) throw new Error('RevenueCat public API key is missing')
+          const userId = Purchases.generateRevenueCatAnonymousAppUserId()
+          await Purchases.configure(apiKey, userId)
+          setIsPurchasesConfigured(true)
+        }
+        const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
+        if (fetchedOfferings.current && fetchedOfferings.current.availablePackages.length > 0) {
+          setOfferings(fetchedOfferings.current.availablePackages)
+        } else {
+          setOfferings([])
+        }
+      } catch (err) {
+        console.error('Error loading offerings:', err)
+        setError('Failed to load subscription offerings: ' + (err instanceof Error ? err.message : JSON.stringify(err)))
+      } finally {
+        setLoadingOfferings(false)
+      }
+    }
+    configureAndLoadOfferings()
+  }, [isPurchasesConfigured])
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
@@ -26,25 +50,6 @@ export default function SubscribePage() {
       router.push('/bookings')
     }
   }, [isLoading, isSubscribed, router])
-
-  const loadOfferings = async () => {
-    setLoadingOfferings(true)
-    try {
-      const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
-      console.log("Fetched Offerings Object:", fetchedOfferings)
-      if (fetchedOfferings.current && fetchedOfferings.current.availablePackages.length > 0) {
-        setOfferings(fetchedOfferings.current.availablePackages)
-      } else {
-        console.warn("No current offering or packages found.")
-        setOfferings([])
-      }
-    } catch (err) {
-      console.error('Error loading offerings:', err)
-      setError('Failed to load subscription offerings: ' + (err instanceof Error ? err.message : JSON.stringify(err)))
-    } finally {
-      setLoadingOfferings(false)
-    }
-  }
 
   const handlePurchase = async (pkg: Package) => {
     if (!currentUser) {
@@ -79,14 +84,14 @@ export default function SubscribePage() {
     }
   }
 
-  const monthly_subscription_plan = offerings.find(pkg => pkg.webBillingProduct?.identifier === 'monthly_subscription')
-  const annual_subscription_plan = offerings.find(pkg => pkg.webBillingProduct?.identifier === 'annual_subscription')
-  const professional_plan = offerings.find(pkg => pkg.webBillingProduct?.identifier === 'subscription_pro')
+  const monthlyPlan = offerings.find(pkg => pkg.identifier === 'monthly_subscription');
+  const annualPlan = offerings.find(pkg => pkg.identifier === 'annual_subscription');
+  const professionalPlan = offerings.find(pkg => pkg.identifier === 'subscription_pro');
   
-  console.log("Monthly Plan Found:", monthly_subscription_plan)
-  console.log("Annual Plan Found:", annual_subscription_plan)
-  console.log("Professional Plan Found:", professional_plan)
-  console.log({ monthly_subscription_plan, annual_subscription_plan, professional_plan });
+  console.log("Monthly Plan Found:", monthlyPlan)
+  console.log("Annual Plan Found:", annualPlan)
+  console.log("Professional Plan Found:", professionalPlan)
+  console.log({ monthlyPlan, annualPlan, professionalPlan });
 
   let banner = null;
   if (!isInitialized) {
@@ -110,10 +115,10 @@ export default function SubscribePage() {
       </div>
 
       <div className="mx-auto max-w-4xl grid grid-cols-1 gap-8 md:grid-cols-2 items-start">
-        {monthly_subscription_plan && (() => {
-          const product = monthly_subscription_plan.webBillingProduct
+        {monthlyPlan && (() => {
+          const product = monthlyPlan.webBillingProduct
           return (
-            <div key={monthly_subscription_plan.identifier} className="rounded-2xl border border-border p-8 shadow-sm">
+            <div key={monthlyPlan.identifier} className="rounded-2xl border border-border p-8 shadow-sm">
               <h2 className="text-lg font-semibold leading-8 text-foreground">{product.displayName}</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{product.description || 'Access all standard features.'}</p>
               <p className="mt-6 flex items-baseline gap-x-1">
@@ -126,7 +131,7 @@ export default function SubscribePage() {
                 <li className="flex gap-x-3">Invite guests</li>
               </ul>
               <button
-                onClick={() => handlePurchase(monthly_subscription_plan)}
+                onClick={() => handlePurchase(monthlyPlan)}
                 className="mt-8 block w-full rounded-md bg-secondary px-3.5 py-2.5 text-center text-sm font-semibold text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
                 Pay way later
@@ -135,10 +140,10 @@ export default function SubscribePage() {
           )
         })()}
 
-        {annual_subscription_plan && (() => {
-          const product = annual_subscription_plan.webBillingProduct
+        {annualPlan && (() => {
+          const product = annualPlan.webBillingProduct
           return (
-            <div key={annual_subscription_plan.identifier} className="relative rounded-2xl border border-primary p-8 shadow-lg">
+            <div key={annualPlan.identifier} className="relative rounded-2xl border border-primary p-8 shadow-lg">
               <div className="absolute top-0 -translate-y-1/2 transform rounded-full bg-primary px-3 py-1 text-xs font-semibold tracking-wide text-primary-foreground">
                 Most popular
               </div>
@@ -155,7 +160,7 @@ export default function SubscribePage() {
                 <li className="flex gap-x-3">2 X Free Presentation calls</li>
               </ul>
               <button
-                onClick={() => handlePurchase(annual_subscription_plan)}
+                onClick={() => handlePurchase(annualPlan)}
                 className="mt-8 block w-full rounded-md bg-primary px-3.5 py-2.5 text-center text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
                 Book Now - Save
@@ -165,8 +170,8 @@ export default function SubscribePage() {
         })()}
       </div>
 
-      {professional_plan && (() => {
-        const product = professional_plan.webBillingProduct;
+      {professionalPlan && (() => {
+        const product = professionalPlan.webBillingProduct;
         return (
           <div 
             className="mt-16 pt-16 pb-16 md:border-t border-border bg-cover bg-center relative rounded-lg shadow-md"
@@ -195,7 +200,7 @@ export default function SubscribePage() {
                     <li className="flex gap-x-3">Privacy from guests</li>
                   </ul>
                   <button
-                    onClick={() => handlePurchase(professional_plan)}
+                    onClick={() => handlePurchase(professionalPlan)}
                     className="mt-8 block w-full rounded-md bg-secondary px-3.5 py-2.5 text-center text-sm font-semibold text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                   >
                     Host a plek
