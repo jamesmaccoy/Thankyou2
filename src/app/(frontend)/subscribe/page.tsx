@@ -18,8 +18,10 @@ export default function SubscribePage() {
   const [isPurchasesConfigured, setIsPurchasesConfigured] = useState(false)
 
   useEffect(() => {
-    loadOfferings()
-  }, [])
+    if (isInitialized) {
+      loadOfferings()
+    }
+  }, [isInitialized])
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
