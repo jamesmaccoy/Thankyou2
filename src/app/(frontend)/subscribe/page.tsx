@@ -25,7 +25,7 @@ export default function SubscribePage() {
   useEffect(() => {
     if (!isLoading && isSubscribed) {
       console.log('User already subscribed, redirecting to /admin from useEffect.')
-      router.push('/admin')
+      router.push('/bookings')
     }
   }, [isLoading, isSubscribed, router])
 
@@ -41,8 +41,8 @@ export default function SubscribePage() {
         setOfferings([])
       }
     } catch (err) {
-      setError('Failed to load subscription offerings')
       console.error('Error loading offerings:', err)
+      setError('Failed to load subscription offerings: ' + (err instanceof Error ? err.message : JSON.stringify(err)))
     } finally {
       setLoadingOfferings(false)
     }
@@ -67,7 +67,7 @@ export default function SubscribePage() {
 
       let isCancelled = false
       try {
-        if ((rcError as any).code === ErrorCode.UserCancelledError) {
+        if (rcError && typeof rcError === 'object' && 'code' in rcError && (rcError as { code: unknown }).code === ErrorCode.UserCancelledError) {
           isCancelled = true
         }
       } catch (e) { /* Silently ignore if .code access fails */ }
@@ -88,31 +88,13 @@ export default function SubscribePage() {
   console.log("Monthly Plan Found:", monthly_subscription_plan)
   console.log("Annual Plan Found:", annual_subscription_plan)
   console.log("Professional Plan Found:", professional_plan)
+  console.log({ monthly_subscription_plan, annual_subscription_plan, professional_plan });
 
-  if (isLoading || loadingOfferings) {
-    return (
-      <div className="container py-12 text-center">
-        <p>Loading plans...</p>
-      </div>
-    )
+  if (!isInitialized) {
+    return <div>Please log in</div>;
   }
-
-  if (error && offerings.length === 0) {
-    return (
-      <div className="container py-12 text-center">
-        <h1 className="text-2xl font-bold mb-4 text-destructive">Error</h1>
-        <p className="text-destructive-foreground">{error}</p>
-        <p className="text-muted-foreground mt-2">Please try refreshing the page.</p>
-      </div>
-    )
-  }
-
   if (isSubscribed) {
-    return (
-      <div className="container py-12 text-center">
-        <p>Loading your access...</p>
-      </div>
-    )
+    return <div>You are already subscribed!</div>;
   }
 
   return (
@@ -227,5 +209,5 @@ export default function SubscribePage() {
         );
       })()}
     </div>
-  )
+  );
 }

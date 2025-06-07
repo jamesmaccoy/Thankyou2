@@ -2,6 +2,9 @@ import type { RequiredDataFromCollectionSlug } from 'payload'
 
 // Used for pre-seeded content so that the homepage is not empty
 export const homeStatic: RequiredDataFromCollectionSlug<'pages'> = {
+  id: 'home-static',
+  updatedAt: new Date().toISOString(),
+  createdAt: new Date().toISOString(),
   slug: 'home',
   _status: 'published',
   hero: {

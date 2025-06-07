@@ -34,14 +34,19 @@ export const useSubscription = (entitlementId?: string): SubscriptionStatus => {
             : activeEntitlementKeys.length > 0;
 
           if (isCurrentlySubscribed) {
+            let expirationDate: Date | null = null;
+            if (entitlementId && entitlements[entitlementId]?.expirationDate) {
+              expirationDate = new Date(entitlements[entitlementId].expirationDate);
+            } else if (activeEntitlementKeys.length > 0) {
+              const firstKey = activeEntitlementKeys[0];
+              if (firstKey && entitlements[firstKey]?.expirationDate) {
+                expirationDate = new Date(entitlements[firstKey].expirationDate);
+              }
+            }
             setSubscriptionStatus({
               isSubscribed: true,
               entitlements: activeEntitlementKeys,
-              expirationDate: entitlementId && entitlements[entitlementId]?.expirationDate
-                ? new Date(entitlements[entitlementId].expirationDate)
-                : activeEntitlementKeys.length > 0 && entitlements[activeEntitlementKeys[0]]?.expirationDate
-                  ? new Date(entitlements[activeEntitlementKeys[0]].expirationDate)
-                  : null,
+              expirationDate,
               isLoading: false,
               error: null,
             });
