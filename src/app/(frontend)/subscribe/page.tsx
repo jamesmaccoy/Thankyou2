@@ -18,31 +18,8 @@ export default function SubscribePage() {
   const [isPurchasesConfigured, setIsPurchasesConfigured] = useState(false)
 
   useEffect(() => {
-    const configureAndLoadOfferings = async () => {
-      setLoadingOfferings(true)
-      try {
-        if (!isPurchasesConfigured) {
-          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
-          if (!apiKey) throw new Error('RevenueCat public API key is missing')
-          const userId = Purchases.generateRevenueCatAnonymousAppUserId()
-          await Purchases.configure(apiKey, userId)
-          setIsPurchasesConfigured(true)
-        }
-        const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
-        if (fetchedOfferings.current && fetchedOfferings.current.availablePackages.length > 0) {
-          setOfferings(fetchedOfferings.current.availablePackages)
-        } else {
-          setOfferings([])
-        }
-      } catch (err) {
-        console.error('Error loading offerings:', err)
-        setError('Failed to load subscription offerings: ' + (err instanceof Error ? err.message : JSON.stringify(err)))
-      } finally {
-        setLoadingOfferings(false)
-      }
-    }
-    configureAndLoadOfferings()
-  }, [isPurchasesConfigured])
+    loadOfferings()
+  }, [])
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
@@ -50,6 +27,25 @@ export default function SubscribePage() {
       router.push('/bookings')
     }
   }, [isLoading, isSubscribed, router])
+
+  const loadOfferings = async () => {
+    setLoadingOfferings(true)
+    try {
+      const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
+      console.log("Fetched Offerings Object:", fetchedOfferings)
+      if (fetchedOfferings.current && fetchedOfferings.current.availablePackages.length > 0) {
+        setOfferings(fetchedOfferings.current.availablePackages)
+      } else {
+        console.warn("No current offering or packages found.")
+        setOfferings([])
+      }
+    } catch (err) {
+      console.error('Error loading offerings:', err)
+      setError('Failed to load subscription offerings: ' + (err instanceof Error ? err.message : JSON.stringify(err)))
+    } finally {
+      setLoadingOfferings(false)
+    }
+  }
 
   const handlePurchase = async (pkg: Package) => {
     if (!currentUser) {
@@ -93,16 +89,15 @@ export default function SubscribePage() {
   console.log("Professional Plan Found:", professionalPlan)
   console.log({ monthlyPlan, annualPlan, professionalPlan });
 
-  let banner = null;
   if (!isInitialized) {
-    banner = <div className="mb-4 text-center text-warning">Please log in to purchase a plan.</div>;
-  } else if (isSubscribed) {
-    banner = <div className="mb-4 text-center text-success">You are already subscribed!</div>;
+    return <div>Please log in</div>;
+  }
+  if (isSubscribed) {
+    return <div>You are already subscribed!</div>;
   }
 
   return (
     <div className="container py-16 sm:py-24">
-      {banner}
       {error && offerings.length > 0 && (
         <div className="mb-8 p-4 text-center text-sm text-destructive bg-destructive/10 rounded-md">
           <p>{error}</p>
