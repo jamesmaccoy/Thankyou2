@@ -17,10 +17,8 @@ export default function SubscribePage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isInitialized) {
-      loadOfferings()
-    }
-  }, [isInitialized])
+    loadOfferings()
+  }, [])
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
@@ -90,15 +88,16 @@ export default function SubscribePage() {
   console.log("Professional Plan Found:", professional_plan)
   console.log({ monthly_subscription_plan, annual_subscription_plan, professional_plan });
 
+  let banner = null;
   if (!isInitialized) {
-    return <div>Please log in</div>;
-  }
-  if (isSubscribed) {
-    return <div>You are already subscribed!</div>;
+    banner = <div className="mb-4 text-center text-warning">Please log in to purchase a plan.</div>;
+  } else if (isSubscribed) {
+    banner = <div className="mb-4 text-center text-success">You are already subscribed!</div>;
   }
 
   return (
     <div className="container py-16 sm:py-24">
+      {banner}
       {error && offerings.length > 0 && (
         <div className="mb-8 p-4 text-center text-sm text-destructive bg-destructive/10 rounded-md">
           <p>{error}</p>
