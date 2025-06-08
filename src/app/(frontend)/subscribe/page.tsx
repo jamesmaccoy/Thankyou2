@@ -128,7 +128,7 @@ export default function SubscribePage() {
               </p>
               <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-muted-foreground xl:mt-10">
                 <li className="flex gap-x-3">Calendar booking request</li>
-                <li className="flex gap-x-3">Curated unique solutions</li>
+                <li className="flex gap-x-3">Curated unique packages</li>
                 <li className="flex gap-x-3">Invite guests</li>
               </ul>
               <button
@@ -156,7 +156,7 @@ export default function SubscribePage() {
               </p>
               <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-muted-foreground xl:mt-10">
                 <li className="flex gap-x-3">Calendar booking request</li>
-                <li className="flex gap-x-3">Curated unique solutions</li>
+                <li className="flex gap-x-3">Curated unique packages</li>
                 <li className="flex gap-x-3">Invite guests</li>
                 <li className="flex gap-x-3">2 X Free Presentation calls</li>
               </ul>
