@@ -55,21 +55,27 @@ export const RevenueCatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         
         setIsInitialized(true)
 
-        // Get customer info
+        // Only try to get customer info if user is authenticated
+        if (!currentUser) {
+          setCustomerInfo(null)
+          setError(null)
+          return
+        }
         const info = await purchases.getCustomerInfo()
         console.log('Customer info:', info)
         setCustomerInfo(info)
         setError(null)
       } catch (err) {
         console.error('RevenueCat getCustomerInfo error:', err)
-        setError(err)
+        setError(err instanceof Error ? err : new Error('Failed to load customer info'))
+        setCustomerInfo(null)
       } finally {
         setIsLoading(false)
       }
     }
 
     initRevenueCat()
-  }, [currentUser?.id])
+  }, [currentUser])
 
   const refreshCustomerInfo = async () => {
     if (typeof window === 'undefined') return
