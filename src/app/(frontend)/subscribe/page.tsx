@@ -198,7 +198,7 @@ export default function SubscribePage() {
                     <li className="flex gap-x-3">Insight report</li>
                     <li className="flex gap-x-3">Calendar booking request</li>
                     <li className="flex gap-x-3">Short term lease agreement</li>
-                    <li className="flex gap-x-3">Privacy from guests</li>
+                    <li className="flex gap-x-3">Estimates for guests</li>
                   </ul>
                   <button
                     onClick={() => handlePurchase(professional_plan)}
