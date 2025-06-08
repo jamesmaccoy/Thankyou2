@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useUserContext } from '@/context/UserContext'
 import { useRevenueCat } from '@/providers/RevenueCat'
 import { useSubscription } from '@/hooks/useSubscription'
-import { Purchases, Package, PurchasesError, ErrorCode } from '@revenuecat/purchases-js'
+import { Purchases, Package, PurchasesError, ErrorCode, Offering } from '@revenuecat/purchases-js'
 import { useRouter } from 'next/navigation'
 
 export default function SubscribePage() {
@@ -12,7 +12,7 @@ export default function SubscribePage() {
   const { currentUser } = useUserContext()
   const { customerInfo, isInitialized } = useRevenueCat()
   const { isSubscribed, isLoading } = useSubscription()
-  const [offerings, setOfferings] = useState<Package[]>([])
+  const [offerings, setOfferings] = useState<Offering[]>([])
   const [loadingOfferings, setLoadingOfferings] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -32,10 +32,12 @@ export default function SubscribePage() {
   const loadOfferings = async () => {
     setLoadingOfferings(true)
     try {
+      console.log('RevenueCat API Key:', process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY)
+      console.log('Current User:', currentUser)
       const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
       console.log("Fetched Offerings Object:", fetchedOfferings)
-      if (fetchedOfferings.current && fetchedOfferings.current.availablePackages.length > 0) {
-        setOfferings(fetchedOfferings.current.availablePackages)
+      if (fetchedOfferings.all) {
+        setOfferings(Object.values(fetchedOfferings.all))
       } else {
         console.warn("No current offering or packages found.")
         setOfferings([])
@@ -81,9 +83,12 @@ export default function SubscribePage() {
     }
   }
 
-  const monthly_subscription_plan = offerings.find(pkg => pkg.webBillingProduct?.identifier === 'monthly_subscription')
-  const annual_subscription_plan = offerings.find(pkg => pkg.webBillingProduct?.identifier === 'annual_subscription')
-  const professional_plan = offerings.find(pkg => pkg.webBillingProduct?.identifier === 'subscription_pro')
+  // Find the correct offering
+  const adminOffering = offerings.find(offering => offering.identifier === "simpleplek_admin");
+
+  const monthly_subscription_plan = adminOffering?.availablePackages.find(pkg => pkg.identifier === "$rc_monthly");
+  const annual_subscription_plan = adminOffering?.availablePackages.find(pkg => pkg.identifier === "$rc_annual");
+  const professional_plan = adminOffering?.availablePackages.find(pkg => pkg.identifier === "$rc_six_month");
   
   console.log("Monthly Plan Found:", monthly_subscription_plan)
   console.log("Annual Plan Found:", annual_subscription_plan)
