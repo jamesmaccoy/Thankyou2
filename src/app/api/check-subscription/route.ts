@@ -12,14 +12,14 @@ export async function GET(request: NextRequest) {
     
     const token = authCookie.value
     const [header, payload, signature] = token.split('.')
+    if (!payload) throw new Error('Invalid token: missing payload')
     const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString())
     const userId = decodedPayload.id
 
     // Initialize RevenueCat with the Web Billing API key
-    const purchases = Purchases.configure(
-      process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY,
-      userId
-    )
+    const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY;
+    if (!apiKey) throw new Error('RevenueCat public API key is missing');
+    const purchases = Purchases.configure(apiKey, userId)
 
     // Get customer info
     const customerInfo = await purchases.getCustomerInfo()
