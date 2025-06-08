@@ -158,7 +158,7 @@ export default function SubscribePage() {
                 <li className="flex gap-x-3">Calendar booking request</li>
                 <li className="flex gap-x-3">Curated unique packages</li>
                 <li className="flex gap-x-3">Invite guests</li>
-                <li className="flex gap-x-3">2 X Free Presentation calls</li>
+                <li className="flex gap-x-3">Welcome meeting</li>
               </ul>
               <button
                 onClick={() => handlePurchase(annual_subscription_plan)}
