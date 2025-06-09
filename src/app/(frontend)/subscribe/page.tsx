@@ -110,7 +110,7 @@ export default function SubscribePage() {
         </div>
       )}
       <div className="mx-auto max-w-2xl text-center mb-12 sm:mb-16">
-        <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">Stay at your self built cabins</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">Stay at one of our self built cabins</h1>
         <p className="mt-4 text-lg leading-8 text-muted-foreground">
         Become a member to see the calendar</p>
       </div>
