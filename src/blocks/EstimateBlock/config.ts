@@ -8,8 +8,8 @@ export const StayDuration: Block = {
       name: 'baseRateOverride',
       type: 'number',
       defaultValue: 150,
-      label: 'Base Rate per Night',
-      required: true,
+      label: 'Base Rate per Night (Override)',
+      required: false,
     }
   ],
   labels: {

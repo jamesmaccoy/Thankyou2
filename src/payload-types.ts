@@ -370,6 +370,15 @@ export interface Estimate {
  */
 export interface Page {
   id: string;
+  baseRate?: number | null;
+  packageTypes?:
+    | {
+        name: string;
+        description?: string | null;
+        price?: number | null;
+        id?: string | null;
+      }[]
+    | null;
   title: string;
   hero: {
     type: 'none' | 'highImpact' | 'mediumImpact' | 'lowImpact';
@@ -1078,6 +1087,15 @@ export interface EstimatesSelect<T extends boolean = true> {
  * via the `definition` "pages_select".
  */
 export interface PagesSelect<T extends boolean = true> {
+  baseRate?: T;
+  packageTypes?:
+    | T
+    | {
+        name?: T;
+        description?: T;
+        price?: T;
+        id?: T;
+      };
   title?: T;
   hero?:
     | T

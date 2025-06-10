@@ -62,7 +62,7 @@ export default async function Bookings() {
     <>
       <PageClient />
       <div className="my-10 container space-y-10">
-        <div className="flex justify-end mb-6">
+        <div className="flex justify-end mb-6 gap-2">
           {latestEstimate ? (
             <Link href={`/estimate/${latestEstimate.id}`}>
               <Button variant="default">View your last estimate</Button>
@@ -70,6 +70,15 @@ export default async function Bookings() {
           ) : (
             <Button variant="default" disabled>No estimate available</Button>
           )}
+          <Link href="/plek">
+            <Button variant="default">Create a Plek</Button>
+          </Link>
+          <Link href="/plek/adminsPage">
+            <Button variant="default">Plek Dashboard</Button>
+          </Link>
+          <Link href="/plek">
+            <Button variant="default">Go to Pleks</Button>
+          </Link>
         </div>
 
         {upcomingBookings.docs.length === 0 && pastBookings.docs.length === 0 ? (

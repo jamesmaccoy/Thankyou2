@@ -17,82 +17,27 @@ export type EstimateBlockProps = EstimateBlockType & {
   className?: string
   /** The unique post ID (not the slug) */
   postId: string
-  baseRate: number
+  baseRate: number // from Page
   baseRateOverride?: number
+  packageTypes: any[] // from Page
 }
 
-// Define package tiers with their thresholds and multipliers
-const packageTiers = [
-  {
-    id: "per_night",
-    title: "Per Night",
-    minNights: 1,
-    maxNights: 1,
-    multiplier: 1.0,
-  },
-  {
-    id: "three_nights",
-    title: "3 Night Package",
-    minNights: 2,
-    maxNights: 3,
-    multiplier: 0.9, // 10% discount
-  },
-  {
-    id: "Weekly",
-    title: "Weekly Package",
-    minNights: 4,
-    maxNights: 7,
-    multiplier: 0.8, // 20% discount
-  },
-  {
-    id: "2Xweekly",
-    title: "2X Weekly Package",
-    minNights: 8,
-    maxNights: 13,
-    multiplier: 0.7, // 30% discount
-  },
-  {
-    id: "weekX3",
-    title: "3 Week Package",
-    minNights: 14,
-    maxNights: 28,
-    multiplier: 0.5, // 50% discount
-  },
-  {
-    id: "monthly",
-    title: "Monthly Package",
-    minNights: 29,
-    maxNights: 365,
-    multiplier: 0.7, // 30% discount
-  }
-]
-
-if (packageTiers.length === 0) {
-  throw new Error('packageTiers array must not be empty');
-}
-
-// Define a type for a package tier
-type PackageTier = {
-  id: string;
-  title: string;
-  minNights: number;
-  maxNights: number;
-  multiplier: number;
-};
-
-// Helper to always get a valid tier
-function getValidTier(diffDays: number): PackageTier {
-  if (packageTiers.length === 0) {
-    // Fallback tier if none are defined
+// Helper to always get a valid tier from packageTypes
+function getValidTierFromPackages(diffDays: number, packageTypes: EstimateBlockProps['packageTypes']): any {
+  if (!packageTypes || packageTypes.length === 0) {
     return {
-      id: 'default',
-      title: 'Default Package',
+      name: 'Default Package',
       minNights: 1,
       maxNights: 365,
-      multiplier: 1,
-    };
+      price: undefined,
+    }
   }
-  return packageTiers.find(tier => diffDays >= tier.minNights && diffDays <= tier.maxNights) || packageTiers[0]!;
+  // Find the first package with a minNights/maxNights range that matches diffDays
+  // If not found, return the first package
+  return packageTypes.find((pkg: any) => {
+    // If minNights/maxNights are not set, treat as always valid
+    return (!pkg.minNights || diffDays >= pkg.minNights) && (!pkg.maxNights || diffDays <= pkg.maxNights)
+  }) || packageTypes[0]
 }
 
 // Helper to get a valid base rate
@@ -104,12 +49,12 @@ function getValidBaseRate(baseRate: unknown, baseRateOverride: unknown): number 
   return 150; // fallback default
 }
 
-export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRate = 150, baseRateOverride, blockType, postId }) => {
+export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRate = 150, baseRateOverride, blockType, postId, packageTypes }) => {
   const effectiveBaseRate = getValidBaseRate(baseRate, baseRateOverride);
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [endDate, setEndDate] = useState<Date | null>(null)
   const [selectedDuration, setSelectedDuration] = useState(1)
-  const [currentTier, setCurrentTier] = useState<PackageTier>(getValidTier(1));
+  const [currentTier, setCurrentTier] = useState<any>(getValidTierFromPackages(1, packageTypes));
   const { currentUser } = useUserContext()
   const { isSubscribed } = useSubscription()
   const isCustomer = !!currentUser
@@ -121,14 +66,12 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
     if (startDate && endDate) {
       const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      
-      // Always get a valid tier
-      const tier = getValidTier(diffDays)
-
+      // Always get a valid tier from packageTypes
+      const tier = getValidTierFromPackages(diffDays, packageTypes)
       setSelectedDuration(diffDays)
       setCurrentTier(tier)
     }
-  }, [startDate, endDate])
+  }, [startDate, endDate, packageTypes])
 
   if (blockType !== 'stayDuration') {
     return null
@@ -197,7 +140,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       <div className="space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">Package:</span>
-          <span className="font-medium">{currentTier.title}</span>
+          <span className="font-medium">{currentTier.name}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-xs text-muted-foreground">Property Slug:</span>

@@ -59,6 +59,39 @@ export const Pages: CollectionConfig<'pages'> = {
   },
   fields: [
     {
+      name: 'baseRate',
+      type: 'number',
+      required: false,
+      admin: {
+        position: 'sidebar',
+      },
+    },
+    {
+      name: 'packageTypes',
+      type: 'array',
+      label: 'Package Types',
+      fields: [
+        {
+          name: 'name',
+          type: 'text',
+          required: true,
+        },
+        {
+          name: 'description',
+          type: 'textarea',
+          required: false,
+        },
+        {
+          name: 'price',
+          type: 'number',
+          required: false,
+        },
+      ],
+      admin: {
+        position: 'sidebar',
+      },
+    },
+    {
       name: 'title',
       type: 'text',
       required: true,
@@ -120,6 +153,7 @@ export const Pages: CollectionConfig<'pages'> = {
         position: 'sidebar',
       },
     },
+    
     ...slugField(),
   ],
   hooks: {

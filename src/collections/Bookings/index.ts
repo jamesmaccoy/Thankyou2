@@ -445,29 +445,32 @@ export const Booking: CollectionConfig = {
   access: {
     create: ({ req: { user } }) => {
       if (!user) return false
-      const roles = user.role || []
+      const roles = (user as any).role || []
       return roles.includes('admin') || roles.includes('customer')
     },
     read: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
+      const roles = (user as any).role || []
+      if (roles.includes('admin')) return true
+      if (roles.includes('customer')) {
         return { customer: { equals: user.id } }
       }
       return false
     },
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
+      const roles = (user as any).role || []
+      if (roles.includes('admin')) return true
+      if (roles.includes('customer')) {
         return { customer: { equals: user.id } }
       }
       return false
     },
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
+      const roles = (user as any).role || []
+      if (roles.includes('admin')) return true
+      if (roles.includes('customer')) {
         return { customer: { equals: user.id } }
       }
       return false
