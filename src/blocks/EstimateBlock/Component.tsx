@@ -139,11 +139,11 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       data-stay-duration 
       className={cn('flex flex-col space-y-4 p-6 bg-card rounded-lg border border-border', className)}
     >
-      <h3 className="text-lg font-semibold">Book Your Stay</h3>
+      <h3 className="text-lg font-semibold">Estimate</h3>
       
       {/* Date Selection */}
       <div className="flex flex-col space-y-2">
-        <label className="text-sm font-medium">Select Dates</label>
+        <label className="text-sm font-medium">Duration</label>
         <div className="flex space-x-2">
           <Popover>
             <PopoverTrigger asChild>
@@ -155,7 +155,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {startDate ? format(startDate, "PPP") : <span>Check-in date</span>}
+                {startDate ? format(startDate, "PPP") : <span>When</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -178,7 +178,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {endDate ? format(endDate, "PPP") : <span>Check-out date</span>}
+                {endDate ? format(endDate, "PPP") : <span>Until</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -198,10 +198,6 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         <div className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">Package:</span>
           <span className="font-medium">{currentTier.title}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">Property Slug:</span>
-          <span className="font-mono text-xs">{postId}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">Base Rate:</span>
