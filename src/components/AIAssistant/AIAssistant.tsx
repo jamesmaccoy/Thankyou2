@@ -16,6 +16,7 @@ interface SpeechRecognitionEvent extends Event {
       }
     }
   }
+  resultIndex: number
 }
 
 interface SpeechRecognition extends EventTarget {
@@ -24,6 +25,7 @@ interface SpeechRecognition extends EventTarget {
   lang: string
   onresult: (event: SpeechRecognitionEvent) => void
   onend: () => void
+  onerror: (event: any) => void
   start: () => void
   stop: () => void
 }
@@ -57,28 +59,73 @@ export const AIAssistant = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const synthRef = useRef<SpeechSynthesis | null>(null)
+  const isProcessingRef = useRef(false)
+  const finalTranscriptRef = useRef('')
 
   useEffect(() => {
     // Initialize speech recognition
-    if (typeof window !== 'undefined' && 'SpeechRecognition' in window) {
-      recognitionRef.current = new (window.SpeechRecognition || window.webkitSpeechRecognition)()
-      recognitionRef.current.continuous = false
-      recognitionRef.current.interimResults = false
-      recognitionRef.current.lang = 'en-US'
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (SpeechRecognition) {
+        try {
+          recognitionRef.current = new SpeechRecognition()
+          recognitionRef.current.continuous = true // Enable continuous recognition
+          recognitionRef.current.interimResults = true // Get interim results
+          recognitionRef.current.lang = 'en-US'
 
-      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results?.[0]?.[0]?.transcript
-        if (transcript) {
-          setInput(transcript)
-          handleSubmit(new Event('submit') as any)
+          recognitionRef.current.onresult = async (event: SpeechRecognitionEvent) => {
+            let interimTranscript = ''
+            let finalTranscript = ''
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript
+              if (event.results[i].isFinal) {
+                finalTranscript += transcript
+              } else {
+                interimTranscript += transcript
+              }
+            }
+
+            // Update input with interim results
+            setInput(interimTranscript || finalTranscript)
+
+            // If we have a final transcript and we're not already processing
+            if (finalTranscript && !isProcessingRef.current) {
+              isProcessingRef.current = true
+              finalTranscriptRef.current = finalTranscript
+              await handleSubmit(new Event('submit') as any)
+              isProcessingRef.current = false
+            }
+          }
+
+          recognitionRef.current.onend = () => {
+            if (isListening) {
+              // Restart recognition if we're still supposed to be listening
+              try {
+                recognitionRef.current?.start()
+              } catch (error) {
+                console.error('Error restarting speech recognition:', error)
+                setIsListening(false)
+                setMicError('Error with speech recognition. Please try again.')
+              }
+            }
+          }
+
+          recognitionRef.current.onerror = (event) => {
+            console.error('Speech recognition error:', event)
+            setMicError('Error with speech recognition. Please try again.')
+            setIsListening(false)
+          }
+        } catch (error) {
+          console.error('Error initializing speech recognition:', error)
+          setMicError('Speech recognition is not supported in your browser.')
         }
-      }
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false)
+      } else {
+        setMicError('Speech recognition is not supported in your browser.')
       }
     }
 
@@ -98,16 +145,32 @@ export const AIAssistant = () => {
   }, [])
 
   const startListening = () => {
-    if (recognitionRef.current) {
+    if (!recognitionRef.current) {
+      setMicError('Speech recognition is not available.')
+      return
+    }
+
+    try {
+      setMicError(null)
+      finalTranscriptRef.current = ''
       recognitionRef.current.start()
       setIsListening(true)
+    } catch (error) {
+      console.error('Error starting speech recognition:', error)
+      setMicError('Failed to start speech recognition. Please try again.')
+      setIsListening(false)
     }
   }
 
   const stopListening = () => {
     if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      setIsListening(false)
+      try {
+        recognitionRef.current.stop()
+        setIsListening(false)
+      } catch (error) {
+        console.error('Error stopping speech recognition:', error)
+        setMicError('Error stopping speech recognition.')
+      }
     }
   }
 
@@ -115,25 +178,37 @@ export const AIAssistant = () => {
     if (synthRef.current) {
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.onstart = () => setIsSpeaking(true)
-      utterance.onend = () => setIsSpeaking(false)
+      utterance.onend = () => {
+        setIsSpeaking(false)
+        // If we're still listening, restart recognition after speaking
+        if (isListening && recognitionRef.current) {
+          try {
+            recognitionRef.current.start()
+          } catch (error) {
+            console.error('Error restarting speech recognition after speaking:', error)
+          }
+        }
+      }
       synthRef.current.speak(utterance)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    const messageToSend = finalTranscriptRef.current || input
+    if (!messageToSend.trim()) return
 
-    const userMessage: Message = { role: 'user', content: input }
+    const userMessage: Message = { role: 'user', content: messageToSend }
     setMessages((prev) => [...prev, userMessage])
     setInput('')
+    finalTranscriptRef.current = ''
     setIsLoading(true)
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: messageToSend }),
       })
 
       const data = await response.json()
@@ -157,57 +232,48 @@ export const AIAssistant = () => {
   }, [messages])
 
   return (
-    <div className="fixed bottom-[105px] right-4 z-50">
-      {!isOpen ? (
-        <Button
-          onClick={() => setIsOpen(true)}
-          className="h-14 w-14 rounded-full bg-primary hover:bg-primary/90"
-        >
-          <Bot className="h-6 w-6" />
-        </Button>
-      ) : (
-        <Card className="w-[350px] shadow-lg">
-          <div className="flex items-center justify-between border-b p-4">
+    <div className="fixed bottom-4 right-4 z-50">
+      <Button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          'rounded-full w-12 h-12 p-0',
+          isOpen ? 'bg-destructive hover:bg-destructive/90' : 'bg-primary hover:bg-primary/90',
+        )}
+      >
+        {isOpen ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
+      </Button>
+
+      {isOpen && (
+        <Card className="absolute bottom-16 right-0 w-[350px] shadow-lg">
+          <div className="p-4 border-b">
             <h3 className="font-semibold">AI Assistant</h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
-          <div className="h-[400px]">
-            <ScrollArea className="h-full">
-              <div className="p-4 space-y-4">
-                {messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={cn(
-                      'flex w-fit max-w-[85%] rounded-lg px-4 py-2',
-                      message.role === 'user'
-                        ? 'ml-auto bg-primary text-primary-foreground'
-                        : 'bg-muted',
-                    )}
-                  >
-                    <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="flex w-fit max-w-[85%] rounded-lg bg-muted px-4 py-2">
-                    <LoadingDots />
-                  </div>
+          <ScrollArea ref={scrollRef} className="h-[400px] p-4">
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={cn(
+                  'mb-4 p-3 rounded-lg',
+                  message.role === 'user'
+                    ? 'bg-primary text-primary-foreground ml-auto'
+                    : 'bg-muted',
                 )}
+              >
+                {message.content}
               </div>
-            </ScrollArea>
-          </div>
+            ))}
+            {isLoading && (
+              <div className="flex w-fit max-w-[85%] rounded-lg bg-muted px-4 py-2">
+                <LoadingDots />
+              </div>
+            )}
+          </ScrollArea>
           <form onSubmit={handleSubmit} className="border-t p-4">
             <div className="flex gap-2">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your message..."
+                placeholder={isListening ? "I'm listening..." : 'Type your message...'}
                 className="flex-1"
                 disabled={isLoading || isListening}
               />
@@ -216,7 +282,8 @@ export const AIAssistant = () => {
                 size="icon"
                 variant={isListening ? 'destructive' : 'outline'}
                 onClick={isListening ? stopListening : startListening}
-                disabled={isLoading || isSpeaking}
+                disabled={isLoading || isSpeaking || !!micError}
+                title={micError || (isListening ? 'Stop listening' : 'Start listening')}
               >
                 {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
@@ -224,6 +291,7 @@ export const AIAssistant = () => {
                 <Send className="h-4 w-4" />
               </Button>
             </div>
+            {micError && <p className="text-sm text-destructive mt-2">{micError}</p>}
           </form>
         </Card>
       )}
