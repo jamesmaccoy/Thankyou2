@@ -4,8 +4,8 @@ import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import { getMeUser } from '@/utilities/getMeUser'
 
-// Initialize the Google Generative AI with your API key
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '')
+// Use the GEMINI_API_KEY environment variable defined in your .env file
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 export async function POST(req: Request) {
   try {
