@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useUserContext } from '@/context/UserContext'
 import { useRevenueCat } from '@/providers/RevenueCat'
 import { useSubscription } from '@/hooks/useSubscription'
-import { Purchases, Package, PurchasesError, ErrorCode } from '@revenuecat/purchases-js'
+import { Purchases, Package, PurchasesError, ErrorCode, Offering } from '@revenuecat/purchases-js'
 import { useRouter } from 'next/navigation'
 
 export default function SubscribePage() {
@@ -12,7 +12,7 @@ export default function SubscribePage() {
   const { currentUser } = useUserContext()
   const { customerInfo, isInitialized } = useRevenueCat()
   const { isSubscribed, isLoading } = useSubscription()
-  const [offerings, setOfferings] = useState<Package[]>([])
+  const [offerings, setOfferings] = useState<Offering[]>([])
   const [loadingOfferings, setLoadingOfferings] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPurchasesConfigured, setIsPurchasesConfigured] = useState(false)
@@ -33,14 +33,9 @@ export default function SubscribePage() {
   const loadOfferings = async () => {
     setLoadingOfferings(true)
     try {
-      const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
-      console.log("Fetched Offerings Object:", fetchedOfferings)
-      if (fetchedOfferings.current && fetchedOfferings.current.availablePackages.length > 0) {
-        setOfferings(fetchedOfferings.current.availablePackages)
-      } else {
-        console.warn("No current offering or packages found.")
-        setOfferings([])
-      }
+      const fetched = await Purchases.getSharedInstance().getOfferings()
+      console.log("Fetched Offerings Object:", fetched)
+      setOfferings(Object.values(fetched.all))
     } catch (err) {
       console.error('Error loading offerings:', err)
       setError('Failed to load subscription offerings: ' + (err instanceof Error ? err.message : JSON.stringify(err)))
@@ -82,9 +77,12 @@ export default function SubscribePage() {
     }
   }
 
-  const monthlyPlan = offerings.find(pkg => pkg.identifier === 'monthly_subscription');
-  const annualPlan = offerings.find(pkg => pkg.identifier === 'annual_subscription');
-  const professionalPlan = offerings.find(pkg => pkg.identifier === 'subscription_pro');
+  // Find the correct offering
+  const adminOffering = offerings.find(o => o.identifier === 'simpleplek_admin')
+
+  const monthlyPlan      = adminOffering?.availablePackages.find(p => p.identifier === '$rc_monthly')
+  const annualPlan       = adminOffering?.availablePackages.find(p => p.identifier === '$rc_annual')
+  const professionalPlan = adminOffering?.availablePackages.find(p => p.identifier === '$rc_six_month')
   
   console.log("Monthly Plan Found:", monthlyPlan)
   console.log("Annual Plan Found:", annualPlan)
