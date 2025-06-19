@@ -1,19 +1,24 @@
 // app/api/bookings/route.ts
 import { NextResponse } from 'next/server'
 import { getPayload } from 'payload'
-import { getMeUser } from '@/utilities/getMeUser'
 import config from '@payload-config'
 import type { Booking } from '@/payload-types'
 
 export async function POST(req: Request) {
   try {
-    const currentUser = await getMeUser()
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const payload = await getPayload({ config })
-    const data = await req.json()
+    
+    // Add better error handling for JSON parsing
+    let data
+    try {
+      const rawBody = await req.text()
+      console.log('Raw request body:', rawBody)
+      data = JSON.parse(rawBody)
+      console.log('Parsed JSON data:', data)
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
     
     const { postId, fromDate, toDate } = data
 
@@ -22,6 +27,20 @@ export async function POST(req: Request) {
     if (!postId) {
       console.error('No postId provided in request')
       return NextResponse.json({ error: 'Post ID is required' }, { status: 400 })
+    }
+
+    // Get user using Payload's auth method
+    let currentUser
+    try {
+      const authResult = await payload.auth({ headers: req.headers })
+      if (!authResult.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      currentUser = authResult.user
+      console.log('Authenticated user:', { id: currentUser.id, role: currentUser.role })
+    } catch (authError) {
+      console.error('Authentication error:', authError)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // First, fetch the post to ensure it exists and get its data
@@ -72,7 +91,7 @@ export async function POST(req: Request) {
         post: post.id,
         fromDate,
         toDate,
-        customer: currentUser.user.id,
+        customer: currentUser.id,
         token: Math.random().toString(36).substring(2, 15),
         paymentStatus: 'unpaid'
       })
@@ -86,7 +105,7 @@ export async function POST(req: Request) {
             post: post.id, // Use the actual post ID here
             fromDate,
             toDate,
-            customer: currentUser.user.id,
+            customer: currentUser.id,
             token: Math.random().toString(36).substring(2, 15),
             paymentStatus: 'unpaid'
           },
@@ -99,7 +118,7 @@ export async function POST(req: Request) {
         console.error('Booking creation error details:', {
           message: bookingErrorMessage,
           stack: bookingError instanceof Error ? bookingError.stack : undefined,
-          currentUser: currentUser.user.id,
+          currentUser: currentUser.id,
           postId: post.id,
           fromDate,
           toDate
