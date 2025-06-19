@@ -45,17 +45,26 @@ export default function RegisterPage() {
 
   const handleRegister = async (values: FormValues) => {
     try {
+      // Convert role string to array as expected by Payload
+      const payload = {
+        ...values,
+        role: [values.role], // Convert string to array
+      }
+
       const res = await fetch(`/api/users`, {
         method: 'POST',
         credentials: 'include',
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
         headers: {
           'Content-Type': 'application/json',
         },
       })
 
       if (!res.ok) {
-        throw new Error('Invalid email or password')
+        // Get the actual error message from the response
+        const errorData = await res.json()
+        console.error('Registration error:', errorData)
+        throw new Error(errorData.message || 'Registration failed')
       }
 
       const validatedNext = validateRedirect(next)
@@ -69,7 +78,7 @@ export default function RegisterPage() {
       router.push('/login')
     } catch (err) {
       console.error(err)
-      setError(err.message)
+      setError(err instanceof Error ? err.message : 'An error occurred')
     }
   }
 
@@ -116,7 +125,7 @@ export default function RegisterPage() {
         <div className="mt-5">
           <p className="text-center text-sm tracking-wide font-medium">
             Already have an account?{' '}
-            <Link href="/register" className="text-primary underline">
+            <Link href="/login" className="text-primary underline">
               Log in
             </Link>
           </p>
