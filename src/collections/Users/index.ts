@@ -7,7 +7,7 @@ export const Users: CollectionConfig = {
   slug: 'users',
   access: {
     admin: authenticated,
-    create: adminOrCustomer,
+    create: () => true,
     delete: ({ req: { user } }) => {
       if (!user) return false
       return user.role?.includes('admin') || false
