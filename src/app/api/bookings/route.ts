@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     try {
       console.log('Attempting to fetch post with ID/slug:', postId)
       
-      // Try to find the post by slug first
+      // Try to find the post by slug first - using admin access to bypass restrictions
       const postBySlug = await payload.find({
         collection: 'posts',
         where: {
@@ -36,22 +36,29 @@ export async function POST(req: Request) {
             equals: postId
           }
         },
-        limit: 1
+        limit: 1,
+        overrideAccess: true, // Bypass access controls for this operation
       })
 
-      let post
+      let post: any = null
       if (postBySlug.docs.length > 0) {
         post = postBySlug.docs[0]
         console.log('Found post by slug:', { id: post.id, title: post.title })
       } else {
-        // If not found by slug, try by ID
-        post = await payload.findByID({
-          collection: 'posts',
-          id: postId,
-        })
+        // If not found by slug, try by ID - using admin access to bypass restrictions
+        try {
+          post = await payload.findByID({
+            collection: 'posts',
+            id: postId,
+            overrideAccess: true, // Bypass access controls for this operation
+          })
+        } catch (findError) {
+          console.error('Error finding post by ID:', findError)
+          post = null
+        }
       }
 
-      if (!post) {
+      if (!post || !post.id) {
         console.error('Post not found:', postId)
         return NextResponse.json({ error: `Post with ID/slug ${postId} not found in database` }, { status: 404 })
       }
@@ -60,21 +67,48 @@ export async function POST(req: Request) {
 
       // Create booking in Payload CMS with the post relationship
       console.log('Creating booking with post:', { postId: post.id, title: post.title })
-      
-      const booking = await payload.create({
-        collection: "bookings",
-        data: {
-          title: post.title,
-          post: post.id, // Use the actual post ID here
-          fromDate,
-          toDate,
-          customer: currentUser.user.id,
-          token: Math.random().toString(36).substring(2, 15),
-          paymentStatus: 'unpaid'
-        },
+      console.log('Booking data to create:', {
+        title: post.title,
+        post: post.id,
+        fromDate,
+        toDate,
+        customer: currentUser.user.id,
+        token: Math.random().toString(36).substring(2, 15),
+        paymentStatus: 'unpaid'
       })
-
-      console.log('Created booking:', { id: booking.id })
+      
+      let booking
+      try {
+        booking = await payload.create({
+          collection: "bookings",
+          data: {
+            title: post.title,
+            post: post.id, // Use the actual post ID here
+            fromDate,
+            toDate,
+            customer: currentUser.user.id,
+            token: Math.random().toString(36).substring(2, 15),
+            paymentStatus: 'unpaid'
+          },
+          overrideAccess: true, // Bypass access controls for booking creation
+        })
+        console.log('Created booking successfully:', { id: booking.id })
+      } catch (bookingError) {
+        console.error('Error creating booking:', bookingError)
+        const bookingErrorMessage = bookingError instanceof Error ? bookingError.message : 'Unknown booking creation error'
+        console.error('Booking creation error details:', {
+          message: bookingErrorMessage,
+          stack: bookingError instanceof Error ? bookingError.stack : undefined,
+          currentUser: currentUser.user.id,
+          postId: post.id,
+          fromDate,
+          toDate
+        })
+        return NextResponse.json(
+          { error: `Failed to create booking: ${bookingErrorMessage}` },
+          { status: 500 }
+        )
+      }
 
       // Fetch the created booking with populated relationships
       const populatedBooking = await payload.findByID({
@@ -88,14 +122,18 @@ export async function POST(req: Request) {
       return NextResponse.json(populatedBooking)
     } catch (error) {
       console.error('Error in post/booking operation:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const errorStack = error instanceof Error ? error.stack : undefined
+      const errorName = error instanceof Error ? error.name : 'Error'
+      
       console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
+        message: errorMessage,
+        stack: errorStack,
+        name: errorName,
         postId: postId
       })
       return NextResponse.json(
-        { error: `Error in post/booking operation: ${(error as Error).message}. PostId: ${postId}` },
+        { error: `Error in post/booking operation: ${errorMessage}. PostId: ${postId}` },
         { status: 500 }
       )
     }
