@@ -635,7 +635,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
             onAddPackageType={addPackageType}
             onRemovePackageType={removePackageType}
             onAddPackageTemplate={addPackageTemplate}
-            packageTemplates={packageTemplates}
           />
           
           <DialogFooter>
@@ -673,7 +672,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
             onAddPackageType={addPackageType}
             onRemovePackageType={removePackageType}
             onAddPackageTemplate={addPackageTemplate}
-            packageTemplates={packageTemplates}
             isEditing={true}
           />
           
@@ -806,7 +804,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     onAddPackageType,
     onRemovePackageType,
     onAddPackageTemplate,
-    packageTemplates,
     isEditing = false 
   }: {
     formData: PostFormData
@@ -821,7 +818,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     onAddPackageType: () => void
     onRemovePackageType: (idx: number) => void
     onAddPackageTemplate: (templateKey: string) => void
-    packageTemplates: typeof packageTemplates
     isEditing?: boolean
   }) {
     return (
