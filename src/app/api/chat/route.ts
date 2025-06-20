@@ -87,7 +87,8 @@ export async function POST(req: Request) {
               Estimates:
               ${JSON.stringify(context.estimates, null, 2)}
               
-              Help users with their bookings and provide information about estimates based on their actual data.`,
+              Help users with their bookings and provide information about estimates based on their actual data. don't use asterisks in your response. only speak words skip symbols. skip id of the estimate just give <a href="${process.env.NEXT_PUBLIC_URL} + /estimates + id">click here</a> 
+ for details. If there is duplicate estimates list only once.`,
             },
           ],
         },

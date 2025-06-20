@@ -248,7 +248,7 @@ export const AIAssistant = () => {
           <div className="p-4 border-b">
             <h3 className="font-semibold">AI Assistant</h3>
           </div>
-          <ScrollArea ref={scrollRef} className="h-[400px] p-4">
+          <ScrollArea ref={scrollRef} className="h-[340px] p-4">
             {messages.map((message, index) => (
               <div
                 key={index}
