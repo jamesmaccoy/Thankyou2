@@ -222,31 +222,46 @@ export const Estimate: CollectionConfig = {
   access: {
     create: ({ req: { user } }) => {
       if (!user) return false
-      const roles = (user as any).role || []
+      const roles = user.role || []
+      // Only admins and customers can create estimates, guests cannot
       return roles.includes('admin') || roles.includes('customer')
     },
     read: ({ req: { user } }) => {
       if (!user) return false
-      if ((user as any).role?.includes('admin')) return true
-      if ((user as any).role?.includes('customer')) {
-        return { customer: { equals: user.id } }
+      if (user.role?.includes('admin')) return true
+      
+      // Build conditions for customers and guests
+      const conditions: any[] = []
+      
+      if (user.role?.includes('customer')) {
+        conditions.push({ customer: { equals: user.id } })
       }
-      return false
+      
+      if (user.role?.includes('guest')) {
+        conditions.push({ guests: { contains: user.id } })
+      }
+      
+      if (conditions.length === 0) return false
+      if (conditions.length === 1) return conditions[0]
+      
+      return { or: conditions }
     },
     update: ({ req: { user } }) => {
       if (!user) return false
-      if ((user as any).role?.includes('admin')) return true
-      if ((user as any).role?.includes('customer')) {
+      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('customer')) {
         return { customer: { equals: user.id } }
       }
+      // Guests cannot update estimates
       return false
     },
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if ((user as any).role?.includes('admin')) return true
-      if ((user as any).role?.includes('customer')) {
+      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('customer')) {
         return { customer: { equals: user.id } }
       }
+      // Guests cannot delete estimates
       return false
     },
   },

@@ -12,7 +12,15 @@ type Params = Promise<{
 export default async function EstimateDetails({ params }: { params: Params }) {
   const { estimateId } = await params
 
-  const { user } = await getMeUser()
+  let user
+  try {
+    const userData = await getMeUser()
+    user = userData.user
+  } catch (error) {
+    console.error('Failed to get user in EstimateDetails:', error)
+    // Redirect to login if user authentication fails
+    redirect('/login')
+  }
 
   if (!user) {
     redirect('/login')

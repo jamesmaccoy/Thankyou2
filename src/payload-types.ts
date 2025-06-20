@@ -171,7 +171,7 @@ export interface Booking {
 export interface User {
   id: string;
   name?: string | null;
-  role: ('admin' | 'customer')[];
+  role: ('admin' | 'customer' | 'guest')[];
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -237,6 +237,7 @@ export interface Post {
  */
 export interface Media {
   id: string;
+  owner?: (string | null) | User;
   alt?: string | null;
   caption?: {
     root: {
@@ -372,6 +373,7 @@ export interface Estimate {
 export interface Page {
   id: string;
   title: string;
+  owner?: (string | null) | User;
   hero: {
     type: 'none' | 'highImpact' | 'mediumImpact' | 'lowImpact';
     richText?: {
@@ -1080,6 +1082,7 @@ export interface EstimatesSelect<T extends boolean = true> {
  */
 export interface PagesSelect<T extends boolean = true> {
   title?: T;
+  owner?: T;
   hero?:
     | T
     | {
@@ -1246,6 +1249,7 @@ export interface PostsSelect<T extends boolean = true> {
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
+  owner?: T;
   alt?: T;
   caption?: T;
   updatedAt?: T;

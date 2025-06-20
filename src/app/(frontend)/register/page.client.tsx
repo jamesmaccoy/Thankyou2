@@ -29,7 +29,7 @@ export default function RegisterPage() {
       email: '',
       password: '',
       name: '',
-      role: 'customer',
+      role: 'guest',
     },
   })
 
@@ -45,17 +45,26 @@ export default function RegisterPage() {
 
   const handleRegister = async (values: FormValues) => {
     try {
+      // Convert role string to array as expected by Payload
+      const payload = {
+        ...values,
+        role: [values.role], // Convert string to array
+      }
+
       const res = await fetch(`/api/users`, {
         method: 'POST',
         credentials: 'include',
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
         headers: {
           'Content-Type': 'application/json',
         },
       })
 
       if (!res.ok) {
-        throw new Error('Invalid email or password')
+        // Get the actual error message from the response
+        const errorData = await res.json()
+        console.error('Registration error:', errorData)
+        throw new Error(errorData.message || 'Registration failed')
       }
 
       const validatedNext = validateRedirect(next)
@@ -69,7 +78,7 @@ export default function RegisterPage() {
       router.push('/login')
     } catch (err) {
       console.error(err)
-      setError(err.message)
+      setError(err instanceof Error ? err.message : 'An error occurred')
     }
   }
 
@@ -79,7 +88,7 @@ export default function RegisterPage() {
         {error && <div className="bg-red-100 text-red-700 p-3 rounded-md my-3">{error}</div>}
         <div className="space-y-2 text-center">
           <h1 className="font-bold text-3xl">Register</h1>
-          <p className="text-muted-foreground text-lg">Register as a customer</p>
+          <p className="text-muted-foreground text-lg">Register as a guest</p>
         </div>
         <form onSubmit={form.handleSubmit(handleRegister)} className="mt-5 space-y-3">
           <Input type="text" placeholder="Name" autoComplete="name" {...form.register('name')} />
@@ -103,8 +112,8 @@ export default function RegisterPage() {
               <SelectValue placeholder="Select user account type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="customer">Customer</SelectItem>
               <SelectItem value="guest">Guest</SelectItem>
+              <SelectItem value="customer">Customer</SelectItem>
             </SelectContent>
           </Select>
 
@@ -116,7 +125,7 @@ export default function RegisterPage() {
         <div className="mt-5">
           <p className="text-center text-sm tracking-wide font-medium">
             Already have an account?{' '}
-            <Link href="/register" className="text-primary underline">
+            <Link href="/login" className="text-primary underline">
               Log in
             </Link>
           </p>

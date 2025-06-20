@@ -8,6 +8,13 @@ export const Header: GlobalConfig = {
   access: {
     read: () => true,
   },
+  admin: {
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('admin') && !roles.includes('customer')
+    },
+  },
   fields: [
     {
       name: 'navItems',

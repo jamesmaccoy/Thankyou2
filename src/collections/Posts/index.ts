@@ -11,6 +11,7 @@ import {
 
 import { authenticated } from '../../access/authenticated'
 import { authenticatedOrPublished } from '../../access/authenticatedOrPublished'
+import { adminOrCustomer } from '../../access/adminOrCustomer'
 import { Banner } from '../../blocks/Banner/config'
 import { Code } from '../../blocks/Code/config'
 import { MediaBlock } from '../../blocks/MediaBlock/config'
@@ -30,10 +31,32 @@ import { slugField } from '@/fields/slug'
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: authenticated,
-    delete: authenticated,
+    create: adminOrCustomer,
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('customer')) {
+        return {
+          authors: {
+            contains: user.id,
+          },
+        }
+      }
+      return false
+    },
     read: authenticatedOrPublished,
-    update: authenticated,
+    update: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('customer')) {
+        return {
+          authors: {
+            contains: user.id,
+          },
+        }
+      }
+      return false
+    },
   },
   // This config controls what's populated by default when a post is referenced
   // https://payloadcms.com/docs/queries/select#defaultpopulate-collection-config-property
@@ -48,6 +71,11 @@ export const Posts: CollectionConfig<'posts'> = {
     },
   },
   admin: {
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('admin') && !roles.includes('customer')
+    },
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {
       url: ({ data, req }) => {
