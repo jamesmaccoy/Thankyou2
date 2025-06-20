@@ -1,5 +1,5 @@
 import React from 'react'
-import EmbedPlekViewer from './page.client'
+import EmbedPlekViewer from '@/app/(frontend)/embed/plek-viewer/page.client'
 
 // Force dynamic rendering for iframe embed
 export const dynamic = 'force-dynamic'
