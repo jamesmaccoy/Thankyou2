@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 const SCOPES = ['https://www.googleapis.com/auth/analytics.readonly']
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON environment variable is not set')
@@ -12,6 +12,9 @@ export async function GET() {
     if (!process.env.GA4_PROPERTY_ID) {
       throw new Error('GA4_PROPERTY_ID environment variable is not set')
     }
+
+    const { searchParams } = new URL(request.url)
+    const type = searchParams.get('type') || 'overview'
 
     // Parse the service account credentials from the environment variable
     let credentials
@@ -34,6 +37,75 @@ export async function GET() {
 
     console.log('GA4 Property ID:', process.env.GA4_PROPERTY_ID)
 
+    if (type === 'posts') {
+      // Get post-specific analytics
+      const response = await analyticsData.properties.runReport({
+        property: `properties/${process.env.GA4_PROPERTY_ID}`,
+        requestBody: {
+          dimensions: [{ name: 'pagePath' }],
+          metrics: [
+            { name: 'screenPageViews' },
+            { name: 'activeUsers' },
+            { name: 'sessions' },
+            { name: 'averageSessionDuration' }
+          ],
+          dateRanges: [
+            {
+              startDate: '30daysAgo',
+              endDate: 'today',
+            },
+          ],
+          dimensionFilter: {
+            filter: {
+              fieldName: 'pagePath',
+              stringFilter: {
+                matchType: 'CONTAINS',
+                value: '/posts/',
+              },
+            },
+          },
+          orderBys: [
+            {
+              metric: {
+                metricName: 'screenPageViews',
+              },
+              desc: true,
+            },
+          ],
+          limit: 50,
+        },
+      })
+
+      // Transform the GA4 response to match the expected format
+      const postAnalytics = (response.data.rows || []).map((row: any) => {
+        const pagePath = row.dimensionValues?.[0]?.value || ''
+        const views = Number(row.metricValues?.[0]?.value || 0)
+        const users = Number(row.metricValues?.[1]?.value || 0)
+        const sessions = Number(row.metricValues?.[2]?.value || 0)
+        const avgSessionDuration = Number(row.metricValues?.[3]?.value || 0)
+        
+        // Extract slug from path (e.g., '/posts/my-post' -> 'my-post')
+        const slug = pagePath.replace('/posts/', '').split('?')[0] // Remove query params
+        
+        return { 
+          slug,
+          pagePath,
+          views, 
+          users, 
+          sessions,
+          avgSessionDuration: Math.round(avgSessionDuration),
+        }
+      }).filter((item: any) => item.slug && item.slug !== '') // Filter out invalid slugs
+
+      return NextResponse.json({
+        postAnalytics,
+        totalPosts: postAnalytics.length,
+        totalViews: postAnalytics.reduce((sum: number, post: any) => sum + post.views, 0),
+        totalUsers: postAnalytics.reduce((sum: number, post: any) => sum + post.users, 0),
+      })
+    }
+
+    // Default overview analytics (existing functionality)
     // Get data for the last 30 days
     const response = await analyticsData.properties.runReport({
       property: `properties/${process.env.GA4_PROPERTY_ID}`,
@@ -72,7 +144,7 @@ export async function GET() {
     }
 
     // Transform the GA4 response to match the dashboard's expected format
-    const historicalData = (response.data.rows || []).map((row) => {
+    const historicalData = (response.data.rows || []).map((row: any) => {
       const date = row.dimensionValues?.[0]?.value || ''
       const users = Number(row.metricValues?.[0]?.value || 0)
       const views = Number(row.metricValues?.[1]?.value || 0)

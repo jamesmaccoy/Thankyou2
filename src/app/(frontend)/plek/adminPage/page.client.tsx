@@ -10,17 +10,19 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Loader2, Plus, Edit, Trash2, Eye, Calendar, BarChart3, Settings, Upload, X, Package, DollarSign, ExternalLink, Code, Copy, ChevronDown, Check } from "lucide-react"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Loader2, Plus, Edit, Trash2, Eye, Calendar, BarChart3, Settings, Upload, X, Package, DollarSign, ExternalLink, Code, Copy, ChevronDown, Check, MoreVertical, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import Image from 'next/image'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
+import { toast } from 'sonner'
 
 interface PlekAdminClientProps {
   user: User
@@ -142,6 +144,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [totalVisitors, setTotalVisitors] = useState<number>(0)
   
   // Form states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -774,6 +777,16 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     }
   }
 
+  // Fetch total visitors on component mount
+  useEffect(() => {
+    fetch('/api/analytics/posts')
+      .then(res => res.json())
+      .then(data => {
+        setTotalVisitors(data.totalUsers || 0)
+      })
+      .catch(err => console.error('Failed to fetch total visitors:', err))
+  }, [])
+
   return (
     <div className="container max-w-7xl mx-auto py-8">
       {/* Header */}
@@ -826,6 +839,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{posts.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {totalVisitors > 0 ? `${totalVisitors.toLocaleString()} total visitors` : ''}
+            </p>
           </CardContent>
         </Card>
         
@@ -1270,6 +1286,7 @@ GET ${typeof window !== 'undefined' ? window.location.origin : 'https://yourdoma
   )
 }
 
+// Enhanced PostsList with analytics
 function PostsList({ 
   posts, 
   onEdit, 
@@ -1287,6 +1304,26 @@ function PostsList({
   formatDate: (dateString: string | undefined) => string
   extractTextFromContent: (content: any) => string
 }) {
+  const [analyticsData, setAnalyticsData] = useState<Record<string, { views: number; users: number; sessions: number }>>({})
+
+  useEffect(() => {
+    // Fetch analytics data for inline display
+    fetch('/api/analytics/posts')
+      .then(res => res.json())
+      .then(data => {
+        const analyticsMap: Record<string, { views: number; users: number; sessions: number }> = {}
+        data.postAnalytics?.forEach((item: any) => {
+          analyticsMap[item.slug] = {
+            views: item.views,
+            users: item.users,
+            sessions: item.sessions
+          }
+        })
+        setAnalyticsData(analyticsMap)
+      })
+      .catch(err => console.error('Failed to fetch inline analytics:', err))
+  }, [])
+
   if (posts.length === 0) {
     return (
       <Card>
@@ -1303,66 +1340,115 @@ function PostsList({
 
   return (
     <div className="grid gap-4">
-      {posts.map((post) => (
-        <Card key={post.id}>
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-semibold truncate">{post.title}</h3>
-                  {getPostStatusBadge(post)}
-                </div>
-                
-                <div className="text-sm text-muted-foreground mb-4">
-                  <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      Created: {formatDate(post.createdAt)}
-                    </span>
-                    {post.publishedAt && (
-                      <span className="flex items-center gap-1">
+      {posts.map((post) => {
+        const analytics = analyticsData[post.slug || '']
+        return (
+          <Card key={post.id}>
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-semibold truncate">{post.title}</h3>
+                    {getPostStatusBadge(post)}
+                    {analytics && post._status === 'published' && (
+                      <Badge variant="outline" className="gap-1">
                         <Eye className="h-3 w-3" />
-                        Published: {formatDate(post.publishedAt)}
-                      </span>
+                        {analytics.views} views
+                      </Badge>
                     )}
                   </div>
-                </div>
-
-                {post.categories && post.categories.length > 0 && (
-                  <div className="flex gap-2 flex-wrap mb-4">
-                    {post.categories.map((category) => (
-                      <Badge key={typeof category === 'string' ? category : category.id} variant="outline" className="text-xs">
-                        {typeof category === 'string' ? category : category.title}
-                      </Badge>
-                    ))}
+                  
+                  <div className="text-sm text-muted-foreground mb-4">
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Created: {formatDate(post.createdAt)}
+                      </span>
+                      {post.publishedAt && (
+                        <span className="flex items-center gap-1">
+                          <Eye className="h-3 w-3" />
+                          Published: {formatDate(post.publishedAt)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                )}
 
-                <div className="text-sm text-muted-foreground">
-                  {extractTextFromContent(post.content).slice(0, 150)}
-                  {extractTextFromContent(post.content).length > 150 && '...'}
+                  {post.categories && post.categories.length > 0 && (
+                    <div className="flex gap-2 flex-wrap mb-4">
+                      {post.categories.map((category) => (
+                        <Badge key={typeof category === 'string' ? category : category.id} variant="outline" className="text-xs">
+                          {typeof category === 'string' ? category : category.title}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-sm text-muted-foreground">
+                    {extractTextFromContent(post.content).slice(0, 150)}
+                    {extractTextFromContent(post.content).length > 150 && '...'}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 ml-4">
+                  {/* Mobile: Sheet with actions */}
+                  <div className="md:hidden">
+                    <Sheet>
+                      <SheetTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="bottom" className="h-auto">
+                        <SheetHeader>
+                          <SheetTitle>{post.title}</SheetTitle>
+                          <SheetDescription>
+                            Choose an action for this plek
+                          </SheetDescription>
+                        </SheetHeader>
+                        <div className="grid gap-3 py-4">
+                          {post.slug && (
+                            <Button variant="outline" className="justify-start gap-2" asChild>
+                              <Link href={`/posts/${post.slug}`} target="_blank">
+                                <Eye className="h-4 w-4" />
+                                View Post
+                              </Link>
+                            </Button>
+                          )}
+                          <Button variant="outline" className="justify-start gap-2" onClick={() => onEdit(post)}>
+                            <Edit className="h-4 w-4" />
+                            Edit Post
+                          </Button>
+                          <Button variant="destructive" className="justify-start gap-2" onClick={() => onDelete(post)}>
+                            <Trash2 className="h-4 w-4" />
+                            Delete Post
+                          </Button>
+                        </div>
+                      </SheetContent>
+                    </Sheet>
+                  </div>
+
+                  {/* Desktop: Inline actions */}
+                  <div className="hidden md:flex items-center gap-2">
+                    {post.slug && (
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/posts/${post.slug}`} target="_blank">
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(post)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(post)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 ml-4">
-                {post.slug && (
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/posts/${post.slug}`} target="_blank">
-                      <Eye className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" onClick={() => onEdit(post)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(post)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }
