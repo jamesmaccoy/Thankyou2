@@ -16,6 +16,9 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
 
   const { currentUser } = useUserContext()
 
+  // Check if user is a customer or admin
+  const isCustomerOrAdmin = currentUser?.role?.includes('customer') || currentUser?.role?.includes('admin')
+
   return (
     <nav className="flex gap-3 items-center">
       {navItems.map(({ link }, i) => {
@@ -28,6 +31,17 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
         }
         return <CMSLink key={i} {...link} appearance="link" />
       })}
+      
+      {/* Add Plek Management link for customers and admins */}
+      {isCustomerOrAdmin && (
+        <Link 
+          href="/plek/adminPage" 
+          className={buttonVariants({ variant: "link" })}
+        >
+          Manage Pleks
+        </Link>
+      )}
+      
       <Link href="/search">
         <span className="sr-only">Search</span>
         <SearchIcon className="w-5 text-primary" />
