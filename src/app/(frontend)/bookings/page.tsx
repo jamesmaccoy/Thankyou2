@@ -112,6 +112,7 @@ export default async function Bookings() {
           </div>
         )}
       </div>
+      <PageClient />
     </main>
   )
 }
