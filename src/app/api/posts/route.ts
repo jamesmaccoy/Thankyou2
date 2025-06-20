@@ -2,6 +2,47 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 
+export async function GET(req: NextRequest) {
+  try {
+    const payload = await getPayload({ config: configPromise })
+    const { searchParams } = new URL(req.url)
+    
+    // Build query parameters
+    const where: any = {}
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const depth = parseInt(searchParams.get('depth') || '1')
+    
+    // Handle status filter
+    const status = searchParams.get('where[_status][equals]')
+    if (status) {
+      where._status = { equals: status }
+    }
+    
+    // Handle other filters if needed
+    searchParams.forEach((value, key) => {
+      if (key.startsWith('where[') && key !== 'where[_status][equals]') {
+        // Parse complex where conditions if needed
+        console.log('Additional filter:', key, value)
+      }
+    })
+    
+    const posts = await payload.find({
+      collection: 'posts',
+      where,
+      limit,
+      depth,
+    })
+
+    return NextResponse.json(posts)
+  } catch (error: any) {
+    console.error('Error fetching posts:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to fetch posts' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const payload = await getPayload({ config: configPromise })
