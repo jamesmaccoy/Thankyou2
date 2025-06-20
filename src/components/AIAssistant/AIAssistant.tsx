@@ -9,14 +9,24 @@ import { Bot, Send, X, Mic, MicOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SpeechRecognitionEvent extends Event {
-  results: {
-    [index: number]: {
-      [index: number]: {
-        transcript: string
-      }
-    }
-  }
+  results: SpeechRecognitionResultList
   resultIndex: number
+}
+
+interface SpeechRecognitionResultList {
+  length: number
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionResult {
+  length: number
+  isFinal: boolean
+  [index: number]: SpeechRecognitionAlternative
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
 }
 
 interface SpeechRecognition extends EventTarget {
@@ -82,11 +92,14 @@ export const AIAssistant = () => {
             let finalTranscript = ''
 
             for (let i = event.resultIndex; i < event.results.length; i++) {
-              const transcript = event.results[i][0].transcript
-              if (event.results[i].isFinal) {
-                finalTranscript += transcript
-              } else {
-                interimTranscript += transcript
+              const result = event.results[i]
+              if (result && result[0]) {
+                const transcript = result[0].transcript
+                if (result.isFinal) {
+                  finalTranscript += transcript
+                } else {
+                  interimTranscript += transcript
+                }
               }
             }
 
