@@ -334,13 +334,14 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
     try {
       // Create both post and estimate
-      const postData = {
+      const postData: any = {
         title: formData.title,
         authors: [user.id],
         categories: formData.categories,
         heroImage: uploadedImages.length > 0 ? uploadedImages[0]?.id : undefined,
         publishedAt: formData._status === 'published' ? new Date().toISOString() : undefined,
         _status: formData._status,
+        ...(formData.baseRate !== '' && { baseRate: Number(formData.baseRate) }),
         meta: {
           title: formData.meta.title || formData.title,
           description: formData.meta.description || formData.content.slice(0, 155),
@@ -355,13 +356,57 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
                 children: [
                   {
                     type: "text",
-                    text: formData.content
+                    text: formData.content || ''
                   }
                 ]
               }
-            ]
+            ],
+            direction: null,
+            format: '',
+            indent: 0,
+            version: 1
           }
         }
+      }
+
+      // Comprehensive validation of all form data
+      console.log('Full form data:', formData)
+      
+      // Clean and validate all string fields
+      const cleanTitle = (formData.title || '').trim()
+      const cleanContent = (formData.content || '').trim()
+      const cleanMetaTitle = (formData.meta.title || '').trim()
+      const cleanMetaDescription = (formData.meta.description || '').trim()
+      const cleanMetaImage = (formData.meta.image || '').trim()
+      
+      // Validate all fields for potential JSON issues
+      const validateField = (value: any, fieldName: string) => {
+        if (typeof value === 'string' && (value === '-' || value.match(/^-+$/))) {
+          throw new Error(`Invalid value "${value}" in field ${fieldName}`)
+        }
+      }
+      
+      validateField(cleanTitle, 'title')
+      validateField(cleanContent, 'content')
+      validateField(cleanMetaTitle, 'meta.title')
+      validateField(cleanMetaDescription, 'meta.description')
+      validateField(cleanMetaImage, 'meta.image')
+      
+      // Validate data before sending
+      if (!cleanTitle) {
+        throw new Error('Title cannot be empty')
+      }
+
+      if (formData.categories.some(catId => !catId || typeof catId !== 'string')) {
+        throw new Error('Invalid category IDs detected')
+      }
+
+      // Validate JSON structure before sending
+      try {
+        JSON.stringify(postData)
+      } catch (jsonError) {
+        console.error('JSON serialization error:', jsonError)
+        throw new Error('Invalid data format - please check your input values')
       }
 
       const response = await fetch('/api/posts', {
@@ -432,6 +477,38 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     clearMessages()
 
     try {
+      // Comprehensive validation of all form data
+      console.log('Full form data:', formData)
+      
+      // Clean and validate all string fields
+      const cleanTitle = (formData.title || '').trim()
+      const cleanContent = (formData.content || '').trim()
+      const cleanMetaTitle = (formData.meta.title || '').trim()
+      const cleanMetaDescription = (formData.meta.description || '').trim()
+      const cleanMetaImage = (formData.meta.image || '').trim()
+      
+      // Validate all fields for potential JSON issues
+      const validateField = (value: any, fieldName: string) => {
+        if (typeof value === 'string' && (value === '-' || value.match(/^-+$/))) {
+          throw new Error(`Invalid value "${value}" in field ${fieldName}`)
+        }
+      }
+      
+      validateField(cleanTitle, 'title')
+      validateField(cleanContent, 'content')
+      validateField(cleanMetaTitle, 'meta.title')
+      validateField(cleanMetaDescription, 'meta.description')
+      validateField(cleanMetaImage, 'meta.image')
+      
+      // Validate data before sending
+      if (!cleanTitle) {
+        throw new Error('Title cannot be empty')
+      }
+
+      if (formData.categories.some(catId => !catId || typeof catId !== 'string')) {
+        throw new Error('Invalid category IDs detected')
+      }
+
       // Safely extract hero image ID
       const getImageId = (image: any): string | undefined => {
         if (!image) return undefined
@@ -460,49 +537,89 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       const metaImageId = formData.meta.image || 
         (uploadedImages.length > 0 && uploadedImages[0] ? uploadedImages[0].id : getImageId(editingPost.heroImage))
 
-      const postData = {
-        title: formData.title,
-        categories: formData.categories,
-        ...(heroImageId && { heroImage: heroImageId }),
-        ...(getPublishedAt() && { publishedAt: getPublishedAt() }),
-        _status: formData._status,
-        meta: {
-          title: formData.meta.title || formData.title,
-          description: formData.meta.description || formData.content.slice(0, 155),
-          ...(metaImageId && { image: metaImageId })
-        },
-        content: {
-          root: {
-            type: "root",
+      // Safely handle baseRate to prevent JSON parsing errors
+      const getValidBaseRate = (): number | undefined => {
+        if (formData.baseRate === '' || formData.baseRate === null || formData.baseRate === undefined) {
+          return undefined
+        }
+        const numValue = Number(formData.baseRate)
+        return !isNaN(numValue) && numValue >= 0 ? numValue : undefined
+      }
+
+      const postData: any = {
+        title: cleanTitle,
+        content: [
+          {
             children: [
               {
-                type: "paragraph",
-                children: [
-                  {
-                    type: "text",
-                    text: formData.content
-                  }
-                ]
+                text: cleanContent
               }
-            ]
+            ],
+            direction: 'ltr',
+            format: '',
+            indent: 0,
+            type: 'paragraph',
+            version: 1
           }
-        }
+        ],
+        meta: {
+          title: cleanMetaTitle,
+          description: cleanMetaDescription,
+          image: cleanMetaImage
+        },
+        categories: formData.categories.filter(cat => cat && typeof cat === 'string'),
+        status: formData._status
+      }
+
+      // Only add baseRate if it's a valid number
+      const validBaseRate = getValidBaseRate()
+      if (validBaseRate !== undefined) {
+        postData.baseRate = validBaseRate
+      }
+
+      // Add other optional fields
+      if (heroImageId) {
+        postData.heroImage = heroImageId
+      }
+
+      const publishedAt = getPublishedAt()
+      if (publishedAt) {
+        postData.publishedAt = publishedAt
+      }
+
+      // Validate JSON structure before sending
+      try {
+        JSON.stringify(postData)
+      } catch (jsonError) {
+        console.error('JSON serialization error:', jsonError)
+        throw new Error('Invalid data format - please check your input values')
       }
 
       // Log the data being sent for debugging
       console.log('Sending PATCH data:', JSON.stringify(postData, null, 2))
+      
+      // Debug: Log the raw JSON string that will be sent
+      const jsonString = JSON.stringify(postData)
+      console.log('Raw JSON string:', jsonString)
+      console.log('JSON string length:', jsonString.length)
+      console.log('First 50 characters:', jsonString.substring(0, 50))
+      
+      // Check for potential problematic values
+      console.log('Form data baseRate:', formData.baseRate, typeof formData.baseRate)
+      console.log('Computed baseRate:', getValidBaseRate())
 
       const response = await fetch(`/api/posts/${editingPost.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(postData),
+        body: jsonString,
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || 'Failed to update post')
+        console.error('Server response error:', errorData)
+        throw new Error(errorData.error || errorData.message || `Server returned ${response.status}: ${response.statusText}`)
       }
 
       const result = await response.json()
