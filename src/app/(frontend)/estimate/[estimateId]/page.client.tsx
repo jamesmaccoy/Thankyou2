@@ -398,9 +398,18 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         }
         const result = await response.json();
         setPaymentSuccess(true)
-        setTimeout(() => {
-          router.push(`/booking-confirmation?total=${packagePrice}&duration=${selectedDuration}`)
-        }, 1500)
+        
+        // Check if a booking was created and redirect accordingly
+        if (result.booking && result.booking.id) {
+          setTimeout(() => {
+            router.push(`/booking-confirmation?bookingId=${result.booking.id}`)
+          }, 1500)
+        } else {
+          // Fallback to the original redirect if no booking ID is available
+          setTimeout(() => {
+            router.push(`/booking-confirmation?total=${packagePrice}&duration=${selectedDuration}`)
+          }, 1500)
+        }
       } catch (purchaseError) {
         // Handle specific RevenueCat error codes
         if (purchaseError instanceof Error) {
