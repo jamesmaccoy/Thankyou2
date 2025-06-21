@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import confetti from "canvas-confetti"
 
+// Confetti celebration component for booking confirmation
 export function ConfettiCelebration() {
   useEffect(() => {
     // Create a spectacular confetti celebration
