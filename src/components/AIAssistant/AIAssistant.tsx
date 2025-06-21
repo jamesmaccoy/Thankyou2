@@ -266,13 +266,16 @@ export const AIAssistant = () => {
               <div
                 key={index}
                 className={cn(
-                  'mb-4 p-3 rounded-lg',
+                  'mb-4 p-3 rounded-lg break-words max-w-[85%]',
                   message.role === 'user'
                     ? 'bg-primary text-primary-foreground ml-auto'
                     : 'bg-muted',
                 )}
               >
-                {message.content}
+                <p
+                  className="text-sm"
+                  dangerouslySetInnerHTML={{ __html: message.content.replace(/\n/g, '<br />') }}
+                />
               </div>
             ))}
             {isLoading && (
