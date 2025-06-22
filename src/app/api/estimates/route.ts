@@ -214,3 +214,126 @@ export async function POST(request: Request) {
     });
   }
 }
+
+export async function DELETE(req: Request) {
+  console.log('=== ESTIMATES API DELETE REQUEST ===')
+  
+  try {
+    const payload = await getPayload({ config: configPromise })
+    const url = new URL(req.url)
+    
+    // Log request details
+    console.log('DELETE Request URL:', req.url)
+    console.log('URL search params:', url.searchParams.toString())
+    
+    // Get the authenticated user
+    const { user } = await payload.auth({ headers: req.headers })
+    
+    if (!user) {
+      console.log('DELETE request: No authenticated user')
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+        status: 401, 
+        headers: { 'Content-Type': 'application/json' } 
+      })
+    }
+    
+    console.log('DELETE request user:', { id: user.id, role: user.role })
+    
+    // Parse the estimate IDs from the query parameters
+    // URL format: ?limit=0&where[id][in][0]=estimateId1&where[id][in][1]=estimateId2
+    const estimateIds: string[] = []
+    
+    // Extract estimate IDs from query parameters
+    url.searchParams.forEach((value, key) => {
+      if (key.startsWith('where[id][in][') && key.endsWith(']')) {
+        estimateIds.push(value)
+      }
+    })
+    
+    console.log('Estimate IDs to delete:', estimateIds)
+    
+    if (estimateIds.length === 0) {
+      return new Response(JSON.stringify({ error: 'No estimate IDs provided' }), { 
+        status: 400, 
+        headers: { 'Content-Type': 'application/json' } 
+      })
+    }
+    
+    // Delete each estimate
+    const deleteResults = []
+    const errors = []
+    
+    for (const estimateId of estimateIds) {
+      try {
+        console.log(`Attempting to delete estimate: ${estimateId}`)
+        
+        // Check if user has permission to delete this estimate
+        if (!user.role?.includes('admin')) {
+          // For non-admin users, check if they own the estimate
+          const estimate = await payload.findByID({
+            collection: 'estimates',
+            id: estimateId,
+            depth: 0,
+          })
+          
+          const estimateCustomerId = typeof estimate.customer === 'string' 
+            ? estimate.customer 
+            : estimate.customer?.id;
+          
+          if (!estimate || estimateCustomerId !== user.id) {
+            console.log(`User ${user.id} cannot delete estimate ${estimateId} - not owner`)
+            errors.push(`Cannot delete estimate ${estimateId}: Access denied`)
+            continue
+          }
+        }
+        
+        await payload.delete({
+          collection: 'estimates',
+          id: estimateId,
+          user,
+        })
+        
+        console.log(`Successfully deleted estimate: ${estimateId}`)
+        deleteResults.push(estimateId)
+      } catch (deleteError) {
+        console.error(`Error deleting estimate ${estimateId}:`, deleteError)
+        const errorMessage = deleteError instanceof Error ? deleteError.message : 'Unknown error'
+        errors.push(`Failed to delete estimate ${estimateId}: ${errorMessage}`)
+      }
+    }
+    
+    console.log('Delete results:', { deleted: deleteResults, errors })
+    
+    if (errors.length > 0 && deleteResults.length === 0) {
+      // All deletions failed
+      return new Response(JSON.stringify({ 
+        error: 'Failed to delete estimates',
+        details: errors 
+      }), { 
+        status: 500, 
+        headers: { 'Content-Type': 'application/json' } 
+      })
+    }
+    
+    // Return success response
+    return new Response(JSON.stringify({ 
+      message: `Successfully deleted ${deleteResults.length} estimate(s)`,
+      deleted: deleteResults,
+      errors: errors.length > 0 ? errors : undefined
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+    
+  } catch (error) {
+    console.error('=== ESTIMATES DELETE ERROR ===')
+    console.error('Delete error:', error)
+    return new Response(JSON.stringify({
+      error: 'Internal server error during estimate deletion',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+}

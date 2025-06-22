@@ -194,8 +194,24 @@ export async function POST(req: NextRequest) {
           }
         }
       } else if (body.content.root) {
-        // Already in Lexical format
-        cleanData.content = body.content
+        // Already in Lexical format, but ensure all nodes have proper types
+        const ensureNodeTypes = (node: any): any => {
+          if (typeof node === 'object' && node !== null) {
+            // Ensure text nodes have type
+            if (node.text !== undefined && !node.type) {
+              node.type = "text"
+            }
+            // Recursively process children
+            if (Array.isArray(node.children)) {
+              node.children = node.children.map(ensureNodeTypes)
+            }
+          }
+          return node
+        }
+        
+        cleanData.content = {
+          root: ensureNodeTypes(body.content.root)
+        }
       } else if (Array.isArray(body.content)) {
         // Convert array format to Lexical
         cleanData.content = {
@@ -203,7 +219,11 @@ export async function POST(req: NextRequest) {
             type: "root",
             children: body.content.map((item: any) => ({
               type: item.type || "paragraph",
-              children: item.children || [{ type: "text", text: item.text || '' }],
+              children: item.children ? item.children.map((child: any) => ({
+                type: child.type || "text",
+                text: child.text || '',
+                ...child
+              })) : [{ type: "text", text: item.text || '' }],
               direction: item.direction || 'ltr',
               format: item.format || '',
               indent: item.indent || 0,
@@ -231,11 +251,38 @@ export async function POST(req: NextRequest) {
     }
 
     // Handle baseRate safely
-    if (body.baseRate !== undefined && body.baseRate !== null && body.baseRate !== '') {
-      const baseRateNum = Number(body.baseRate)
-      if (!isNaN(baseRateNum) && baseRateNum >= 0) {
-        cleanData.baseRate = baseRateNum
+    if (body.baseRate !== undefined) {
+      if (body.baseRate === null || body.baseRate === '') {
+        cleanData.baseRate = null
+      } else {
+        const baseRateNum = Number(body.baseRate)
+        if (!isNaN(baseRateNum) && baseRateNum >= 0) {
+          cleanData.baseRate = baseRateNum
+        }
       }
+    }
+
+    // Handle packageTypes safely
+    if (body.packageTypes !== undefined && Array.isArray(body.packageTypes)) {
+      console.log('Raw body.packageTypes received:', body.packageTypes)
+      
+      cleanData.packageTypes = body.packageTypes
+        .filter((pkg: any) => pkg && typeof pkg === 'object' && pkg.name && pkg.price !== undefined)
+        .map((pkg: any) => ({
+          name: String(pkg.name || '').trim(),
+          description: String(pkg.description || '').trim(),
+          price: Number(pkg.price) || 0,
+          multiplier: Number(pkg.multiplier) || 1,
+          features: Array.isArray(pkg.features) 
+            ? pkg.features.filter((f: any) => f && typeof f === 'string').map((f: string) => ({ feature: f.trim() }))
+            : [],
+          revenueCatId: String(pkg.revenueCatId || '').trim(),
+        }))
+        .filter((pkg: any) => pkg.name && pkg.price >= 0)
+        
+      console.log('Processed cleanData.packageTypes:', cleanData.packageTypes)
+    } else {
+      console.log('No packageTypes in body or not an array:', typeof body.packageTypes, body.packageTypes)
     }
 
     // Handle meta fields safely
@@ -295,6 +342,201 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       { error: error.message || 'Failed to create post' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const payload = await getPayload({ config: configPromise })
+    
+    // Get the authenticated user from the request
+    const { user } = await payload.auth({ headers: req.headers })
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Check if user has permission to delete posts
+    const userRoles = user.role || []
+    if (!userRoles.includes('admin') && !userRoles.includes('customer')) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      )
+    }
+
+    const { searchParams } = new URL(req.url)
+    
+    // Get the post IDs from query parameters
+    // The admin interface sends them as where[id][in][0], where[id][in][1], etc.
+    const postIds: string[] = []
+    
+    // Parse the query parameters to extract post IDs
+    searchParams.forEach((value, key) => {
+      if (key.match(/where\[id\]\[in\]\[\d+\]/)) {
+        postIds.push(value)
+      }
+    })
+
+    if (postIds.length === 0) {
+      return NextResponse.json(
+        { error: 'No post IDs provided for deletion' },
+        { status: 400 }
+      )
+    }
+
+    console.log('Bulk deleting posts:', postIds)
+
+    // Delete each post individually
+    const deletionResults = []
+    for (const postId of postIds) {
+      try {
+        await payload.delete({
+          collection: 'posts',
+          id: postId,
+          user,
+        })
+        deletionResults.push({ id: postId, success: true })
+      } catch (error) {
+        console.error(`Failed to delete post ${postId}:`, error)
+        deletionResults.push({ 
+          id: postId, 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        })
+      }
+    }
+
+    const successCount = deletionResults.filter(r => r.success).length
+    const failureCount = deletionResults.filter(r => !r.success).length
+
+    return NextResponse.json({ 
+      message: `Deleted ${successCount} posts successfully${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
+      results: deletionResults
+    })
+  } catch (error: any) {
+    console.error('Error in bulk delete:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete posts' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const payload = await getPayload({ config: configPromise })
+    
+    // Get the authenticated user from the request
+    const { user } = await payload.auth({ headers: req.headers })
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Check if user has permission to update posts
+    const userRoles = user.role || []
+    if (!userRoles.includes('admin') && !userRoles.includes('customer')) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      )
+    }
+
+    const { searchParams } = new URL(req.url)
+    
+    // Parse the request body
+    let body: any
+    try {
+      body = await req.json()
+    } catch (error) {
+      console.log('No JSON body, treating as query-based update')
+      body = {}
+    }
+
+    // Get the post IDs from query parameters
+    const postIds: string[] = []
+    
+    // Parse the query parameters to extract post IDs
+    searchParams.forEach((value, key) => {
+      if (key.match(/where\[.*\]\[id\]\[in\]\[\d+\]/)) {
+        postIds.push(value)
+      }
+    })
+
+    // Check if this is a draft operation
+    const isDraft = searchParams.get('draft') === 'true'
+
+    if (postIds.length === 0) {
+      return NextResponse.json(
+        { error: 'No post IDs provided for update' },
+        { status: 400 }
+      )
+    }
+
+    console.log('Bulk updating posts:', postIds, 'isDraft:', isDraft)
+
+    // Update each post individually
+    const updateResults = []
+    for (const postId of postIds) {
+      try {
+        // For draft operations, we typically just need to save the current state
+        const updateData: any = {}
+        
+        // If there's body data, include it
+        if (Object.keys(body).length > 0) {
+          Object.assign(updateData, body)
+        }
+
+        // Handle draft-specific logic
+        if (isDraft) {
+          // For drafts, we might want to preserve the current status
+          // The admin interface handles draft saving automatically
+        }
+
+        const updatedPost = await payload.update({
+          collection: 'posts',
+          id: postId,
+          data: updateData,
+          user,
+          draft: isDraft,
+        })
+
+        updateResults.push({ 
+          id: postId, 
+          success: true,
+          doc: updatedPost
+        })
+      } catch (error) {
+        console.error(`Failed to update post ${postId}:`, error)
+        updateResults.push({ 
+          id: postId, 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        })
+      }
+    }
+
+    const successCount = updateResults.filter(r => r.success).length
+    const failureCount = updateResults.filter(r => !r.success).length
+
+    return NextResponse.json({ 
+      message: `Updated ${successCount} posts successfully${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
+      results: updateResults,
+      docs: updateResults.filter(r => r.success).map(r => r.doc)
+    })
+  } catch (error: any) {
+    console.error('Error in bulk update:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to update posts' },
       { status: 500 }
     )
   }

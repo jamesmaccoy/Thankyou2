@@ -606,5 +606,143 @@ export const Booking: CollectionConfig = {
         update: isAdminField,
       },
     },
+    {
+      name: 'packageType',
+      type: 'text',
+      required: false,
+      label: 'Package Type ID',
+      admin: {
+        position: 'sidebar',
+        description: 'The ID of the package type (e.g., per_night, luxury_night, hosted_3nights)',
+      },
+      access: {
+        update: isAdminField,
+      },
+    },
+    // Enhanced package information
+    {
+      name: 'packageDetails',
+      type: 'group',
+      label: 'Package Details',
+      admin: {
+        position: 'sidebar',
+        description: 'Detailed information about the purchased package',
+      },
+      fields: [
+        {
+          name: 'name',
+          type: 'text',
+          label: 'Package Name',
+          admin: {
+            description: 'Human-readable name of the package',
+          },
+        },
+        {
+          name: 'description',
+          type: 'textarea',
+          label: 'Package Description',
+          admin: {
+            description: 'Description of what the package includes',
+          },
+        },
+        {
+          name: 'multiplier',
+          type: 'number',
+          label: 'Price Multiplier',
+          admin: {
+            description: 'Multiplier applied to base rate',
+          },
+        },
+        {
+          name: 'features',
+          type: 'array',
+          label: 'Package Features',
+          fields: [
+            {
+              name: 'feature',
+              type: 'text',
+              required: true,
+            },
+          ],
+        },
+        {
+          name: 'revenueCatId',
+          type: 'text',
+          label: 'RevenueCat ID',
+          admin: {
+            description: 'RevenueCat package identifier',
+          },
+        },
+        {
+          name: 'category',
+          type: 'select',
+          label: 'Package Category',
+          options: [
+            { label: 'Standard', value: 'standard' },
+            { label: 'Luxury', value: 'luxury' },
+            { label: 'Hosted', value: 'hosted' },
+            { label: 'Specialty', value: 'specialty' },
+          ],
+        },
+        {
+          name: 'isHosted',
+          type: 'checkbox',
+          label: 'Is Hosted Package',
+          admin: {
+            description: 'Whether this package includes hosted services',
+          },
+        },
+      ],
+      access: {
+        update: isAdminField,
+      },
+    },
+    // Pricing information
+    {
+      name: 'pricing',
+      type: 'group',
+      label: 'Pricing Information',
+      admin: {
+        position: 'sidebar',
+        description: 'Pricing details for this booking',
+      },
+      fields: [
+        {
+          name: 'baseRate',
+          type: 'number',
+          label: 'Base Rate per Night',
+          admin: {
+            description: 'Base rate before package multiplier',
+          },
+        },
+        {
+          name: 'packageRate',
+          type: 'number',
+          label: 'Package Rate per Night',
+          admin: {
+            description: 'Rate after applying package multiplier',
+          },
+        },
+        {
+          name: 'totalNights',
+          type: 'number',
+          label: 'Total Nights',
+          admin: {
+            description: 'Number of nights for this booking',
+          },
+        },
+        {
+          name: 'totalAmount',
+          type: 'number',
+          label: 'Total Amount',
+          admin: {
+            description: 'Final total amount for the booking',
+          },
+        },
+      ],
+      access: {
+        update: isAdminField,
+      },
+    },
   ],
 }

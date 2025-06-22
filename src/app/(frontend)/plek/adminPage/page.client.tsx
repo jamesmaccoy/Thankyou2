@@ -23,6 +23,7 @@ import Image from 'next/image'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
 import { toast } from 'sonner'
+import { PACKAGE_TYPES, getPackageById, getAllPackageTypes } from '@/lib/package-types'
 
 interface PlekAdminClientProps {
   user: User
@@ -61,71 +62,31 @@ interface UploadedFile {
   filename: string
 }
 
-// Predefined package templates for easy selection
-const packageTemplates = {
-  per_night: {
-    name: "Per Night",
-    description: "Standard nightly rate",
-    multiplier: 1.0,
-    features: ["Standard accommodation", "Basic amenities"] as string[],
-    revenueCatId: "pn"
-  },
-  per_night_luxury: {
-    name: "Luxury Night",
-    description: "Premium nightly rate",
-    multiplier: 1.5,
-    features: ["Premium accommodation", "Enhanced amenities", "Priority service"] as string[],
-    revenueCatId: "per_night_luxury"
-  },
-  three_nights: {
-    name: "3 Nights Package",
-    description: "Three night stay",
-    multiplier: 0.95,
-    features: ["Standard accommodation", "5% discount"] as string[],
-    revenueCatId: "3nights"
-  },
-  hosted3nights: {
-    name: "Hosted 3 Nights",
-    description: "Premium 3-night experience",
-    multiplier: 1.4,
-    features: ["Premium accommodation", "Dedicated host", "Enhanced amenities", "Priority service"] as string[],
-    revenueCatId: "hosted3nights"
-  },
-  weekly: {
-    name: "Weekly Package",
-    description: "Seven night stay",
-    multiplier: 0.85,
-    features: ["Standard accommodation", "15% discount on total"] as string[],
-    revenueCatId: "Weekly"
-  },
-  hosted7nights: {
-    name: "Hosted Weekly",
-    description: "Premium week-long experience",
-    multiplier: 1.3,
-    features: ["Premium accommodation", "Dedicated host", "Enhanced amenities", "Priority service", "15% discount on total"] as string[],
-    revenueCatId: "hosted7nights"
-  },
-  monthly: {
-    name: "Monthly Package",
-    description: "Extended month-long stay",
-    multiplier: 0.7,
-    features: ["Standard accommodation", "30% discount", "Extended stay perks"] as string[],
-    revenueCatId: "monthly"
-  },
-  wine: {
-    name: "Wine Package",
-    description: "Includes wine tasting and selection platters",
-    multiplier: 1.5,
-    features: ["Standard accommodation", "Wine tasting experience", "Curated wine selection", "Sommelier consultation"] as string[],
-    revenueCatId: "Bottle_wine"
+// Replace the existing packageTemplates with centralized types
+const packageTemplates = Object.values(getAllPackageTypes() || {}).reduce((acc: Record<string, any>, pkg) => {
+  acc[pkg.id] = {
+    name: pkg.name,
+    description: pkg.description,
+    multiplier: pkg.multiplier,
+    features: pkg.features,
+    revenueCatId: pkg.revenueCatId,
   }
-} as const
+  return acc
+}, {})
 
-const createPackageFromTemplate = (templateKey: keyof typeof packageTemplates): PackageType => {
-  const template = packageTemplates[templateKey]
+const createPackageFromTemplate = (templateKey: string): PackageType => {
+  const packageTemplate = getPackageById(templateKey)
+  if (!packageTemplate) {
+    throw new Error(`Package template not found: ${templateKey}`)
+  }
+  
   return {
-    ...template,
-    price: '' as number | ''
+    name: packageTemplate.name,
+    description: packageTemplate.description,
+    price: '',
+    multiplier: packageTemplate.multiplier,
+    features: packageTemplate.features,
+    revenueCatId: packageTemplate.revenueCatId,
   }
 }
 
@@ -239,14 +200,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
   // Debounced form update function to improve performance
   const updateFormData = useCallback((updates: Partial<PostFormData>) => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-    }
-    
-    debounceTimerRef.current = setTimeout(() => {
-      const finalUpdates = updateSEOMetaAuto(updates)
-      setFormData(prev => ({ ...prev, ...finalUpdates }))
-    }, 100) // 100ms debounce
+    // Simplified: Direct update without debouncing to avoid React Context issues
+    const finalUpdates = updateSEOMetaAuto(updates)
+    setFormData(prev => ({ ...prev, ...finalUpdates }))
   }, [updateSEOMetaAuto])
 
   // Immediate form update for critical fields
@@ -255,32 +211,44 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   }, [])
 
   const handlePackageChange = useCallback((idx: number, field: keyof PackageType, value: string | number | string[]) => {
+    console.log('handlePackageChange called:', { idx, field, value })
     const newPackageTypes = [...formData.packageTypes]
     newPackageTypes[idx] = { 
       ...newPackageTypes[idx], 
       [field]: value 
     } as PackageType
+    console.log('New packageTypes after change:', newPackageTypes)
     updateFormDataImmediate({ packageTypes: newPackageTypes })
   }, [formData.packageTypes, updateFormDataImmediate])
 
   const addPackageType = useCallback(() => {
+    console.log('addPackageType called, current packages:', formData.packageTypes)
     const newPackage = createPackageFromTemplate('per_night')
+    console.log('Adding new package:', newPackage)
+    const newPackageTypes = [...formData.packageTypes, newPackage]
+    console.log('New packageTypes array:', newPackageTypes)
     updateFormDataImmediate({ 
-      packageTypes: [...formData.packageTypes, newPackage] 
+      packageTypes: newPackageTypes
     })
   }, [formData.packageTypes, updateFormDataImmediate])
 
   const removePackageType = useCallback((idx: number) => {
+    console.log('removePackageType called:', { idx, currentLength: formData.packageTypes.length })
     if (formData.packageTypes.length === 1) return // Keep at least one package
     const newPackageTypes = formData.packageTypes.filter((_, i) => i !== idx)
+    console.log('New packageTypes after removal:', newPackageTypes)
     updateFormDataImmediate({ packageTypes: newPackageTypes })
   }, [formData.packageTypes, updateFormDataImmediate])
 
   const addPackageTemplate = useCallback((templateKey: string) => {
+    console.log('addPackageTemplate called:', { templateKey, currentPackages: formData.packageTypes })
     if (templateKey in packageTemplates) {
-      const newPackage = createPackageFromTemplate(templateKey as keyof typeof packageTemplates)
+      const newPackage = createPackageFromTemplate(templateKey)
+      console.log('Adding template package:', newPackage)
+      const newPackageTypes = [...formData.packageTypes, newPackage]
+      console.log('New packageTypes with template:', newPackageTypes)
       updateFormDataImmediate({ 
-        packageTypes: [...formData.packageTypes, newPackage] 
+        packageTypes: newPackageTypes
       })
     }
   }, [formData.packageTypes, updateFormDataImmediate])
@@ -336,6 +304,29 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     clearMessages()
 
     try {
+      // Debug: Log the complete formData state before processing
+      console.log('=== FORM SUBMISSION DEBUG ===')
+      console.log('Complete formData state:', JSON.stringify(formData, null, 2))
+      console.log('formData.packageTypes length:', formData.packageTypes.length)
+      console.log('formData.packageTypes:', formData.packageTypes)
+      
+      // Debug: Log the packageTypes before processing
+      console.log('Raw formData.packageTypes:', formData.packageTypes)
+      
+      // Filter and process packageTypes
+      const processedPackageTypes = formData.packageTypes.filter(pkg => 
+        pkg.name && pkg.price !== ''
+      ).map(pkg => ({
+        name: pkg.name,
+        description: pkg.description,
+        price: Number(pkg.price),
+        multiplier: pkg.multiplier,
+        features: pkg.features.filter(f => f && f.trim()),
+        revenueCatId: pkg.revenueCatId,
+      }))
+      
+      console.log('Processed packageTypes:', processedPackageTypes)
+
       // Create both post and estimate
       const postData: any = {
         title: formData.title,
@@ -345,6 +336,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         publishedAt: formData._status === 'published' ? new Date().toISOString() : undefined,
         _status: formData._status,
         ...(formData.baseRate !== '' && { baseRate: Number(formData.baseRate) }),
+        // Add packageTypes to the post data
+        packageTypes: processedPackageTypes,
         meta: {
           title: formData.meta.title || formData.title,
           description: formData.meta.description || formData.content.slice(0, 155),
@@ -371,6 +364,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
           }
         }
       }
+
+      // Debug: Log the complete postData being sent
+      console.log('Complete postData being sent:', JSON.stringify(postData, null, 2))
 
       // Comprehensive validation of all form data
       console.log('Full form data:', formData)
@@ -571,7 +567,18 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
           image: cleanMetaImage
         },
         categories: formData.categories.filter(cat => cat && typeof cat === 'string'),
-        status: formData._status
+        _status: formData._status,
+        // Add packageTypes to the post data
+        packageTypes: formData.packageTypes.filter(pkg => 
+          pkg.name && pkg.price !== ''
+        ).map(pkg => ({
+          name: pkg.name,
+          description: pkg.description,
+          price: Number(pkg.price),
+          multiplier: pkg.multiplier,
+          features: pkg.features.filter(f => f && f.trim()),
+          revenueCatId: pkg.revenueCatId,
+        }))
       }
 
       // Only add baseRate if it's a valid number
@@ -683,7 +690,18 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
     // Safely extract package types from post or use default
     const getPackageTypes = (): PackageType[] => {
-      // Since packageTypes is not stored on the Post model, always use default
+      if (post.packageTypes && Array.isArray(post.packageTypes) && post.packageTypes.length > 0) {
+        return post.packageTypes.map((pkg: any) => ({
+          name: pkg.name || '',
+          description: pkg.description || '',
+          price: pkg.price || 0,
+          multiplier: pkg.multiplier || 1,
+          features: Array.isArray(pkg.features) 
+            ? pkg.features.map((f: any) => typeof f === 'string' ? f : f.feature || '').filter((f: string) => f.trim())
+            : [],
+          revenueCatId: pkg.revenueCatId || '',
+        }))
+      }
       return [createPackageFromTemplate('per_night')]
     }
 
@@ -796,14 +814,34 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
           <p className="text-muted-foreground">Manage your posts and content</p>
         </div>
         <div className="flex gap-3">
-          <Button onClick={() => setIsViewerDialogOpen(true)} variant="secondary" className="gap-2">
-            <Code className="h-4 w-4" />
-            Browse Pleks Embed
-          </Button>
-          <Button onClick={() => setIsEmbedDialogOpen(true)} variant="outline" className="gap-2">
-            <Code className="h-4 w-4" />
-            Post Manager Embed
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Code className="h-4 w-4" />
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-0" align="end">
+              <div className="p-1">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2"
+                  onClick={() => setIsViewerDialogOpen(true)}
+                >
+                  <Code className="h-4 w-4" />
+                  Browse Pleks Embed
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2"
+                  onClick={() => setIsEmbedDialogOpen(true)}
+                >
+                  <Code className="h-4 w-4" />
+                  Post Manager Embed
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button onClick={openCreateDialog} className="gap-2">
             <Plus className="h-4 w-4" />
             Create New Plek

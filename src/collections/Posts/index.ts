@@ -248,25 +248,100 @@ export const Posts: CollectionConfig<'posts'> = {
     {
       name: 'baseRate',
       type: 'number',
-      label: 'Base Rate (per night)',
-      required: false,
-      min: 0,
       admin: {
         position: 'sidebar',
+        description: 'Base rate per night in USD',
       },
+      defaultValue: 150,
+    },
+    {
+      name: 'packageTypes',
+      type: 'array',
+      admin: {
+        position: 'sidebar',
+        description: 'Available packages for this plek',
+      },
+      fields: [
+        {
+          name: 'name',
+          type: 'text',
+          required: true,
+        },
+        {
+          name: 'description',
+          type: 'textarea',
+        },
+        {
+          name: 'price',
+          type: 'number',
+          required: true,
+        },
+        {
+          name: 'multiplier',
+          type: 'number',
+          required: true,
+          defaultValue: 1,
+        },
+        {
+          name: 'features',
+          type: 'array',
+          fields: [
+            {
+              name: 'feature',
+              type: 'text',
+            },
+          ],
+        },
+        {
+          name: 'revenueCatId',
+          type: 'text',
+        },
+      ],
     },
     ...slugField(),
   ],
   hooks: {
     afterChange: [revalidatePost],
-    afterRead: [populateAuthors],
+    afterRead: [populateAuthors, (args) => {
+      // Fix any content with undefined node types
+      if (args.doc && args.doc.content && args.doc.content.root) {
+        const fixNodeTypes = (node: any): any => {
+          if (typeof node === 'object' && node !== null) {
+            // Ensure text nodes have type
+            if (node.text !== undefined && !node.type) {
+              node.type = "text"
+            }
+            // Ensure paragraph nodes have type
+            if (node.children && Array.isArray(node.children) && !node.type) {
+              node.type = "paragraph"
+            }
+            // Recursively process children
+            if (Array.isArray(node.children)) {
+              node.children = node.children.map(fixNodeTypes)
+            }
+          }
+          return node
+        }
+
+        try {
+          args.doc.content = {
+            root: fixNodeTypes(args.doc.content.root)
+          }
+        } catch (error) {
+          console.error('Error fixing content node types:', error)
+        }
+      }
+      return args.doc
+    }],
     afterDelete: [revalidateDelete],
   },
   versions: {
     drafts: {
       autosave: {
-        interval: 100, // We set this interval for optimal live preview
+        interval: 2000, // Increased from 100ms to 2000ms to reduce conflicts
       },
+      // Alternative: disable autosave entirely to avoid conflicts
+      // autosave: false,
       schedulePublish: true,
     },
     maxPerDoc: 50,

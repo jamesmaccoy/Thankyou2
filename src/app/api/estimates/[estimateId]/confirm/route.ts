@@ -55,11 +55,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ est
 
     // Update the estimate to mark it as confirmed/paid
     try {
+      // Extract the new packageType from the request body
+      const newPackageType = body.packageType || estimate.packageType || 'standard'
+      
+      console.log('Estimate confirmation data:', {
+        estimateId,
+        oldPackageType: estimate.packageType,
+        newPackageType: newPackageType,
+        requestBody: body
+      })
+
       const updatedEstimate = await payload.update({
         collection: 'estimates',
         id: estimateId,
         data: {
-          paymentStatus: 'paid'
+          paymentStatus: 'paid',
+          packageType: newPackageType // Update the estimate with the new package type
         },
       })
 
@@ -72,6 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ est
         toDate: estimate.toDate,
         guests: estimate.guests || [],
         paymentStatus: 'paid' as const,
+        packageType: newPackageType, // Use the new package type instead of the old one
       }
 
       // Only add token if it exists

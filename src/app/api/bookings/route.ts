@@ -113,13 +113,15 @@ export async function POST(req: Request) {
     const bookingGuests = data.guests || []
     const bookingToken = data.token
     const bookingPaymentStatus = data.paymentStatus || data.payment_status || 'unpaid'
+    const bookingPackageType = data.packageType || data.package_type
 
     console.log('Creating booking with processed data:', { 
       bookingPostId, 
       bookingFromDate, 
       bookingToDate, 
       bookingTitle,
-      bookingCustomer 
+      bookingCustomer,
+      bookingPackageType
     })
 
     // For admin requests, we might have all the data directly
@@ -136,7 +138,8 @@ export async function POST(req: Request) {
             customer: bookingCustomer,
             guests: bookingGuests,
             token: bookingToken || Math.random().toString(36).substring(2, 15),
-            paymentStatus: bookingPaymentStatus
+            paymentStatus: bookingPaymentStatus,
+            packageType: bookingPackageType
           },
           overrideAccess: true, // Bypass access controls for admin creation
         })
@@ -228,7 +231,8 @@ export async function POST(req: Request) {
         toDate: bookingToDate,
         customer: currentUser.id,
         token: Math.random().toString(36).substring(2, 15),
-        paymentStatus: 'unpaid'
+        paymentStatus: 'unpaid',
+        packageType: bookingPackageType
       })
       
       let booking
@@ -242,7 +246,8 @@ export async function POST(req: Request) {
             toDate: bookingToDate,
             customer: currentUser.id,
             token: Math.random().toString(36).substring(2, 15),
-            paymentStatus: 'unpaid'
+            paymentStatus: 'unpaid',
+            packageType: bookingPackageType
           },
           overrideAccess: true, // Bypass access controls for booking creation
         })
@@ -335,5 +340,112 @@ export async function GET(req: Request) {
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch bookings: ' + (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  console.log('=== BOOKING API DELETE REQUEST ===')
+  
+  try {
+    const payload = await getPayload({ config })
+    const url = new URL(req.url)
+    
+    // Log request details
+    console.log('DELETE Request URL:', req.url)
+    console.log('URL search params:', url.searchParams.toString())
+    
+    // Get the authenticated user
+    const { user } = await payload.auth({ headers: req.headers })
+    
+    if (!user) {
+      console.log('DELETE request: No authenticated user')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    console.log('DELETE request user:', { id: user.id, role: user.role })
+    
+    // Parse the booking IDs from the query parameters
+    // URL format: ?limit=0&where[id][in][0]=bookingId1&where[id][in][1]=bookingId2
+    const bookingIds: string[] = []
+    
+    // Extract booking IDs from query parameters
+    url.searchParams.forEach((value, key) => {
+      if (key.startsWith('where[id][in][') && key.endsWith(']')) {
+        bookingIds.push(value)
+      }
+    })
+    
+    console.log('Booking IDs to delete:', bookingIds)
+    
+    if (bookingIds.length === 0) {
+      return NextResponse.json({ error: 'No booking IDs provided' }, { status: 400 })
+    }
+    
+    // Delete each booking
+    const deleteResults = []
+    const errors = []
+    
+    for (const bookingId of bookingIds) {
+      try {
+        console.log(`Attempting to delete booking: ${bookingId}`)
+        
+        // Check if user has permission to delete this booking
+        if (!user.role?.includes('admin')) {
+          // For non-admin users, check if they own the booking
+          const booking = await payload.findByID({
+            collection: 'bookings',
+            id: bookingId,
+            depth: 0,
+          })
+          
+          if (!booking || booking.customer !== user.id) {
+            console.log(`User ${user.id} cannot delete booking ${bookingId} - not owner`)
+            errors.push(`Cannot delete booking ${bookingId}: Access denied`)
+            continue
+          }
+        }
+        
+        await payload.delete({
+          collection: 'bookings',
+          id: bookingId,
+          user,
+        })
+        
+        console.log(`Successfully deleted booking: ${bookingId}`)
+        deleteResults.push(bookingId)
+      } catch (deleteError) {
+        console.error(`Error deleting booking ${bookingId}:`, deleteError)
+        const errorMessage = deleteError instanceof Error ? deleteError.message : 'Unknown error'
+        errors.push(`Failed to delete booking ${bookingId}: ${errorMessage}`)
+      }
+    }
+    
+    console.log('Delete results:', { deleted: deleteResults, errors })
+    
+    if (errors.length > 0 && deleteResults.length === 0) {
+      // All deletions failed
+      return NextResponse.json({ 
+        error: 'Failed to delete bookings',
+        details: errors 
+      }, { status: 500 })
+    }
+    
+    // Return success response
+    return NextResponse.json({ 
+      message: `Successfully deleted ${deleteResults.length} booking(s)`,
+      deleted: deleteResults,
+      errors: errors.length > 0 ? errors : undefined
+    })
+    
+  } catch (error) {
+    console.error('=== BOOKING DELETE ERROR ===')
+    console.error('Delete error:', error)
+    return NextResponse.json(
+      { 
+        error: 'Internal server error during booking deletion',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    )
   }
 }

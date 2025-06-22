@@ -12,6 +12,7 @@ import { useRevenueCat } from '@/providers/RevenueCat'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { DateRange } from 'react-day-picker'
+import { getPackageById, getAllPackageTypes } from '@/lib/package-types'
 
 type Props = {
   data: Booking
@@ -25,7 +26,7 @@ interface RevenueCatProduct extends Product {
 }
 
 // Helper to format and convert price
-function formatPriceWithUSD(product) {
+function formatPriceWithUSD(product: RevenueCatProduct) {
   const price = product.price;
   const priceString = product.priceString;
   const currency = product.currencyCode || 'ZAR';
@@ -36,6 +37,68 @@ function formatPriceWithUSD(product) {
   // Convert ZAR to USD (example rate: 1 USD = 18 ZAR)
   const usd = price / 18;
   return `${priceString || `R${price.toFixed(2)}`} / $${usd.toFixed(2)}`;
+}
+
+// Package details mapping
+const packageDetails = {
+  per_night: {
+    name: "Per Night",
+    description: "Standard nightly rate",
+    features: ["Standard accommodation", "Basic amenities"]
+  },
+  per_night_luxury: {
+    name: "Luxury Night",
+    description: "Premium nightly rate",
+    features: ["Premium accommodation", "Enhanced amenities", "Priority service"]
+  },
+  three_nights: {
+    name: "3 Nights Package",
+    description: "Three night stay",
+    features: ["Standard accommodation", "5% discount"]
+  },
+  hosted3nights: {
+    name: "Hosted 3 Nights",
+    description: "Premium 3-night experience",
+    features: ["Premium accommodation", "Dedicated host", "Enhanced amenities", "Priority service"]
+  },
+  weekly: {
+    name: "Weekly Package",
+    description: "Seven night stay",
+    features: ["Standard accommodation", "15% discount on total"]
+  },
+  hosted7nights: {
+    name: "Hosted Weekly",
+    description: "Premium week-long experience",
+    features: ["Premium accommodation", "Dedicated host", "Enhanced amenities", "Priority service", "15% discount on total"]
+  },
+  monthly: {
+    name: "Monthly Package",
+    description: "Extended month-long stay",
+    features: ["Standard accommodation", "30% discount", "Extended stay perks"]
+  },
+  wine: {
+    name: "Wine Package",
+    description: "Includes wine tasting and selection platters",
+    features: ["Standard accommodation", "Wine tasting experience", "Curated wine selection", "Sommelier consultation"]
+  }
+} as const
+
+// Helper function to get package details from centralized system
+const getPackageDetails = (packageType: string | null) => {
+  if (!packageType) return null
+  
+  const centralizedPackage = getPackageById(packageType)
+  if (centralizedPackage) {
+    return {
+      name: centralizedPackage.name,
+      description: centralizedPackage.description,
+      features: centralizedPackage.features,
+      multiplier: centralizedPackage.multiplier,
+    }
+  }
+  
+  // Fallback to existing packageDetails if centralized not found
+  return packageDetails[packageType as keyof typeof packageDetails] || null
 }
 
 export default function BookingDetailsClientPage({ data, user }: Props) {
@@ -144,9 +207,39 @@ export default function BookingDetailsClientPage({ data, user }: Props) {
                     />
                   </div>
                 )}
-                <div className="flex flex-col text-white">
+                <div className="flex flex-col">
                   <span className="font-medium">Date Booked: {formatDateTime(data?.post.createdAt)}</span>
                   <span className="font-medium">Guests: {Array.isArray(data?.guests) ? data.guests.length : 0}</span>
+                  {data?.packageType && (
+                    <div className="mt-2 p-3 bg-secondary/50 rounded-lg">
+                      <div className="font-medium text-sm text-primary mb-1">Package Purchased</div>
+                      {(() => {
+                        const packageInfo = getPackageDetails(data.packageType);
+                        if (packageInfo) {
+                          return (
+                            <div className="space-y-1">
+                              <div className="font-semibold">{packageInfo.name}</div>
+                              <div className="text-sm text-muted-foreground">{packageInfo.description}</div>
+                              <div className="text-xs">
+                                <div className="font-medium mb-1">Includes:</div>
+                                <ul className="list-disc list-inside space-y-0.5">
+                                  {packageInfo.features.map((feature, idx) => (
+                                    <li key={idx}>{feature}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="font-medium">
+                              {data.packageType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

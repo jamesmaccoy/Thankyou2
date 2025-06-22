@@ -108,8 +108,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           }
         }
       } else if (body.content && body.content.root) {
-        // Already in Lexical format
-        cleanData.content = body.content
+        // Already in Lexical format, but ensure all nodes have proper types
+        const ensureNodeTypes = (node: any): any => {
+          if (typeof node === 'object' && node !== null) {
+            // Ensure text nodes have type
+            if (node.text !== undefined && !node.type) {
+              node.type = "text"
+            }
+            // Recursively process children
+            if (Array.isArray(node.children)) {
+              node.children = node.children.map(ensureNodeTypes)
+            }
+          }
+          return node
+        }
+        
+        cleanData.content = {
+          root: ensureNodeTypes(body.content.root)
+        }
       } else if (Array.isArray(body.content)) {
         // Convert array format to Lexical
         cleanData.content = {
@@ -117,7 +133,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             type: "root",
             children: body.content.map((item: any) => ({
               type: item.type || "paragraph",
-              children: item.children || [{ type: "text", text: item.text || '' }],
+              children: item.children ? item.children.map((child: any) => ({
+                type: child.type || "text",
+                text: child.text || '',
+                ...child
+              })) : [{ type: "text", text: item.text || '' }],
               direction: item.direction || 'ltr',
               format: item.format || '',
               indent: item.indent || 0,
@@ -154,6 +174,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           cleanData.baseRate = baseRateNum
         }
       }
+    }
+
+    // Handle packageTypes safely
+    if (body.packageTypes !== undefined && Array.isArray(body.packageTypes)) {
+      cleanData.packageTypes = body.packageTypes
+        .filter((pkg: any) => pkg && typeof pkg === 'object' && pkg.name && pkg.price !== undefined)
+        .map((pkg: any) => ({
+          name: String(pkg.name || '').trim(),
+          description: String(pkg.description || '').trim(),
+          price: Number(pkg.price) || 0,
+          multiplier: Number(pkg.multiplier) || 1,
+          features: Array.isArray(pkg.features) 
+            ? pkg.features.filter((f: any) => f && typeof f === 'string').map((f: string) => ({ feature: f.trim() }))
+            : [],
+          revenueCatId: String(pkg.revenueCatId || '').trim(),
+        }))
+        .filter((pkg: any) => pkg.name && pkg.price >= 0)
     }
 
     // Handle meta fields safely
