@@ -113,7 +113,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deletingPost, setDeletingPost] = useState<Post | null>(null)
-  const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState(false)
   const [isViewerDialogOpen, setIsViewerDialogOpen] = useState(false)
   const [copiedScript, setCopiedScript] = useState<string | null>(null)
   
@@ -814,34 +813,14 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
           <p className="text-muted-foreground">Manage your posts and content</p>
         </div>
         <div className="flex gap-3">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <Code className="h-4 w-4" />
-                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-0" align="end">
-              <div className="p-1">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-2"
-                  onClick={() => setIsViewerDialogOpen(true)}
-                >
-                  <Code className="h-4 w-4" />
-                  Browse Pleks Embed
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-2"
-                  onClick={() => setIsEmbedDialogOpen(true)}
-                >
-                  <Code className="h-4 w-4" />
-                  Post Manager Embed
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setIsViewerDialogOpen(true)}
+          >
+            <Code className="h-4 w-4" />
+            Browse Pleks Embed
+          </Button>
           <Button onClick={openCreateDialog} className="gap-2">
             <Plus className="h-4 w-4" />
             Create New Plek
@@ -1192,128 +1171,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
             </Button>
             <Button asChild>
               <Link href="/embed/plek-viewer" target="_blank">
-                Preview Embed
-              </Link>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Post Manager Embed Code Dialog */}
-      <Dialog open={isEmbedDialogOpen} onOpenChange={setIsEmbedDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Code className="h-5 w-5" />
-              Post Manager - Embed Code
-            </DialogTitle>
-            <DialogDescription>
-              Copy these code snippets to embed the Post Manager in third-party websites. Authentication required.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Basic Iframe */}
-            <div className="space-y-3">
-              <h4 className="font-semibold">Basic iframe Embed</h4>
-              <div className="relative">
-                <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-{`<iframe 
-  src="${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/embed/post-manager" 
-  width="100%" 
-  height="600"
-  frameborder="0"
-  style="border: 1px solid #e5e7eb; border-radius: 8px;">
-</iframe>`}
-                </pre>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="absolute top-2 right-2"
-                  onClick={() => copyToClipboard(`<iframe src="${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/embed/post-manager" width="100%" height="600" frameborder="0" style="border: 1px solid #e5e7eb; border-radius: 8px;"></iframe>`, 'manager-basic')}
-                >
-                  {copiedScript === 'manager-basic' ? 'Copied!' : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            {/* Responsive Iframe */}
-            <div className="space-y-3">
-              <h4 className="font-semibold">Responsive iframe Embed</h4>
-              <div className="relative">
-                <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-{`<div style="position: relative; width: 100%; height: 600px;">
-  <iframe 
-    src="${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/embed/post-manager"
-    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 1px solid #e5e7eb; border-radius: 8px;"
-    frameborder="0">
-  </iframe>
-</div>`}
-                </pre>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="absolute top-2 right-2"
-                  onClick={() => copyToClipboard(`<div style="position: relative; width: 100%; height: 600px;"><iframe src="${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/embed/post-manager" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 1px solid #e5e7eb; border-radius: 8px;" frameborder="0"></iframe></div>`, 'manager-responsive')}
-                >
-                  {copiedScript === 'manager-responsive' ? 'Copied!' : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            {/* API Endpoints */}
-            <div className="space-y-3">
-              <h4 className="font-semibold">API Endpoints</h4>
-              <div className="relative">
-                <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-{`// Update Post
-PATCH ${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/posts/{id}
-Content-Type: application/json
-
-{
-  "title": "Updated Title",
-  "content": "Updated content",
-  "_status": "published"
-}
-
-// Delete Post  
-DELETE ${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/posts/{id}
-
-// Get Posts (Public)
-GET ${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/posts?where[_status][equals]=published`}
-                </pre>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="absolute top-2 right-2"
-                  onClick={() => copyToClipboard(`// Update Post
-PATCH ${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/posts/{id}
-Content-Type: application/json
-
-{
-  "title": "Updated Title",
-  "content": "Updated content",
-  "_status": "published"
-}
-
-// Delete Post  
-DELETE ${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/posts/{id}
-
-// Get Posts (Public)
-GET ${typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/posts?where[_status][equals]=published`, 'manager-api')}
-                >
-                  {copiedScript === 'manager-api' ? 'Copied!' : <Copy className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEmbedDialogOpen(false)}>
-              Close
-            </Button>
-            <Button asChild>
-              <Link href="/embed/post-manager" target="_blank">
                 Preview Embed
               </Link>
             </Button>
