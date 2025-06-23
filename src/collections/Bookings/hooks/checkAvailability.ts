@@ -7,13 +7,13 @@ export const checkAvailabilityHook: CollectionBeforeChangeHook = async ({
   req,
 }) => {
   if (!('fromDate' in data && 'toDate' in data && 'post' in data)) {
-    throw new APIError('Start date, end date, and post are required.')
+    throw new APIError('Start date, end date, and post are required.', 400, undefined, true)
   }
 
   const { fromDate, toDate } = data
 
   if (fromDate >= toDate) {
-    throw new APIError('Start date must be before end date.')
+    throw new APIError('Start date must be before end date.', 400, undefined, true)
   }
 
   const formattedFromDate = format(new Date(fromDate), 'yyyy-MM-dd')
