@@ -26,7 +26,8 @@ import {
   OverviewField,
   PreviewField,
 } from '@payloadcms/plugin-seo/fields'
-import { slugField } from '@/fields/slug'
+import { slugField } from '../../fields/slug'
+import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
 
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
@@ -259,32 +260,59 @@ export const Posts: CollectionConfig<'posts'> = {
       type: 'array',
       admin: {
         position: 'sidebar',
-        description: 'Available packages for this plek',
+        description: 'Available packages for this plek. You can select from templates or create custom packages.',
       },
       fields: [
+        {
+          name: 'templateId',
+          type: 'select',
+          label: 'Package Template',
+          admin: {
+            description: 'Select a package template from the centralized system (optional)',
+          },
+          options: Object.entries(PACKAGE_TYPES).map(([key, template]) => ({
+            label: template.name,
+            value: key,
+          })),
+        },
         {
           name: 'name',
           type: 'text',
           required: true,
+          admin: {
+            description: 'Package name (will be auto-filled if using a template)',
+          },
         },
         {
           name: 'description',
           type: 'textarea',
+          admin: {
+            description: 'Package description (will be auto-filled if using a template)',
+          },
         },
         {
           name: 'price',
           type: 'number',
           required: true,
+          admin: {
+            description: 'Price for this package (can override template pricing)',
+          },
         },
         {
           name: 'multiplier',
           type: 'number',
           required: true,
           defaultValue: 1,
+          admin: {
+            description: 'Price multiplier applied to base rate',
+          },
         },
         {
           name: 'features',
           type: 'array',
+          admin: {
+            description: 'Package features (will be auto-filled if using a template)',
+          },
           fields: [
             {
               name: 'feature',
@@ -295,44 +323,63 @@ export const Posts: CollectionConfig<'posts'> = {
         {
           name: 'revenueCatId',
           type: 'text',
+          admin: {
+            description: 'RevenueCat package identifier (will be auto-filled if using a template)',
+          },
+        },
+        {
+          name: 'category',
+          type: 'select',
+          label: 'Package Category',
+          admin: {
+            description: 'Package category for organization',
+          },
+          options: [
+            { label: 'Standard', value: 'standard' },
+            { label: 'Luxury', value: 'luxury' },
+            { label: 'Hosted', value: 'hosted' },
+            { label: 'Specialty', value: 'specialty' },
+          ],
+          defaultValue: 'standard',
+        },
+        {
+          name: 'minNights',
+          type: 'number',
+          label: 'Minimum Nights',
+          admin: {
+            description: 'Minimum number of nights for this package',
+          },
+        },
+        {
+          name: 'maxNights',
+          type: 'number',
+          label: 'Maximum Nights',
+          admin: {
+            description: 'Maximum number of nights for this package',
+          },
+        },
+        {
+          name: 'isHosted',
+          type: 'checkbox',
+          label: 'Hosted Package',
+          admin: {
+            description: 'Whether this package includes hosted services',
+          },
         },
       ],
     },
     ...slugField(),
   ],
   hooks: {
+    beforeChange: [
+      (args) => {
+        // Removed auto-population to prevent recursion issues
+        // Package template selection can be handled in the frontend
+        return args.data
+      },
+    ],
     afterChange: [revalidatePost],
-    afterRead: [populateAuthors, (args) => {
-      // Fix any content with undefined node types
-      if (args.doc && args.doc.content && args.doc.content.root) {
-        const fixNodeTypes = (node: any): any => {
-          if (typeof node === 'object' && node !== null) {
-            // Ensure text nodes have type
-            if (node.text !== undefined && !node.type) {
-              node.type = "text"
-            }
-            // Ensure paragraph nodes have type
-            if (node.children && Array.isArray(node.children) && !node.type) {
-              node.type = "paragraph"
-            }
-            // Recursively process children
-            if (Array.isArray(node.children)) {
-              node.children = node.children.map(fixNodeTypes)
-            }
-          }
-          return node
-        }
-
-        try {
-          args.doc.content = {
-            root: fixNodeTypes(args.doc.content.root)
-          }
-        } catch (error) {
-          console.error('Error fixing content node types:', error)
-        }
-      }
-      return args.doc
-    }],
+    afterRead: [populateAuthors],
     afterDelete: [revalidateDelete],
   },
   versions: {

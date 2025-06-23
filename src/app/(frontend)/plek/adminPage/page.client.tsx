@@ -62,34 +62,6 @@ interface UploadedFile {
   filename: string
 }
 
-// Replace the existing packageTemplates with centralized types
-const packageTemplates = Object.values(getAllPackageTypes() || {}).reduce((acc: Record<string, any>, pkg) => {
-  acc[pkg.id] = {
-    name: pkg.name,
-    description: pkg.description,
-    multiplier: pkg.multiplier,
-    features: pkg.features,
-    revenueCatId: pkg.revenueCatId,
-  }
-  return acc
-}, {})
-
-const createPackageFromTemplate = (templateKey: string): PackageType => {
-  const packageTemplate = getPackageById(templateKey)
-  if (!packageTemplate) {
-    throw new Error(`Package template not found: ${templateKey}`)
-  }
-  
-  return {
-    name: packageTemplate.name,
-    description: packageTemplate.description,
-    price: '',
-    multiplier: packageTemplate.multiplier,
-    features: packageTemplate.features,
-    revenueCatId: packageTemplate.revenueCatId,
-  }
-}
-
 interface PackageFormProps {
   packageTypes: PackageType[]
   onPackageChange: (idx: number, field: keyof PackageType, value: string | number | string[]) => void
@@ -107,6 +79,39 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   const [success, setSuccess] = useState<string | null>(null)
   const [totalVisitors, setTotalVisitors] = useState<number>(0)
   
+  // Initialize package templates inside component to avoid React Context issues
+  const packageTemplates = useMemo(() => {
+    const allPackageTypes = getAllPackageTypes()
+    if (!allPackageTypes) return {}
+    
+    return Object.values(allPackageTypes).reduce((acc: Record<string, any>, pkg) => {
+      acc[pkg.id] = {
+        name: pkg.name,
+        description: pkg.description,
+        multiplier: pkg.multiplier,
+        features: pkg.features,
+        revenueCatId: pkg.revenueCatId,
+      }
+      return acc
+    }, {})
+  }, [])
+
+  const createPackageFromTemplate = useCallback((templateKey: string): PackageType => {
+    const packageTemplate = getPackageById(templateKey)
+    if (!packageTemplate) {
+      throw new Error(`Package template not found: ${templateKey}`)
+    }
+    
+    return {
+      name: packageTemplate.name,
+      description: packageTemplate.description,
+      price: '',
+      multiplier: packageTemplate.multiplier,
+      features: packageTemplate.features,
+      revenueCatId: packageTemplate.revenueCatId,
+    }
+  }, [])
+
   // Form states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -116,21 +121,36 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   const [isViewerDialogOpen, setIsViewerDialogOpen] = useState(false)
   const [copiedScript, setCopiedScript] = useState<string | null>(null)
   
-  // Form data with debounced updates
-  const [formData, setFormData] = useState<PostFormData>({
+  // Form data with debounced updates - initialize after createPackageFromTemplate is defined
+  const [formData, setFormData] = useState<PostFormData>(() => ({
     title: '',
     content: '',
     categories: [],
     _status: 'draft',
-    packageTypes: [createPackageFromTemplate('per_night')],
+    packageTypes: [],
     baseRate: '',
     meta: {
       title: '',
       description: '',
       image: ''
     }
-  })
-  
+  }))
+
+  // Initialize default package type when component mounts
+  useEffect(() => {
+    if (formData.packageTypes.length === 0) {
+      try {
+        const defaultPackage = createPackageFromTemplate('per_night')
+        setFormData(prev => ({
+          ...prev,
+          packageTypes: [defaultPackage]
+        }))
+      } catch (error) {
+        console.warn('Failed to create default package template:', error)
+      }
+    }
+  }, [createPackageFromTemplate, formData.packageTypes.length])
+
   // Image upload
   const [uploadedImages, setUploadedImages] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
@@ -186,7 +206,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       content: '',
       categories: [],
       _status: 'draft',
-      packageTypes: [createPackageFromTemplate('per_night')],
+      packageTypes: [],
       baseRate: '',
       meta: {
         title: '',
@@ -1587,7 +1607,7 @@ function PostForm({
         <div className="p-4 border rounded-lg bg-muted/50">
           <p className="text-sm font-medium mb-2">Quick Add Templates:</p>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(packageTemplates).map(([key, template]) => (
+            {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => (
               <Button
                 key={key}
                 type="button"

@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { DateRange } from 'react-day-picker'
 import { getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
 type Props = {
   data: Booking
@@ -176,72 +177,91 @@ export default function BookingDetailsClientPage({ data, user }: Props) {
         </TabsList>
         <TabsContent value="details">
           {data && 'post' in data && typeof data?.post !== 'string' ? (
-            <div className="flex items-start flex-col md:flex-row gap-5 md:gap-10">
-              <div className="md:py-5 py-3">
-                <h1 className="text-4xl mb-3 font-bold">{data?.post.title}</h1>
-                <div className="flex flex-col gap-2">
-                  <label className="text-lg font-medium">Booking Dates:</label>
-                  <Calendar
-                    mode="range"
-                    selected={{
-                      from: data?.fromDate ? new Date(data.fromDate) : undefined,
-                      to: data?.toDate ? new Date(data.toDate) : undefined,
-                    }}
-                    numberOfMonths={2}
-                    className="max-w-md"
-                    disabled={() => true}
-                  />
-                  <div className="text-muted-foreground text-sm mt-1">
-                    {data?.fromDate && data?.toDate
-                      ? `From ${formatDateTime(data.fromDate)} to ${formatDateTime(data.toDate)}`
-                      : 'Select a start and end date'}
-                  </div>
-                </div>
-              </div>
-              <div className="w-full rounded-md overflow-hidden bg-muted p-2 flex items-center gap-3">
-                {!!data?.post.meta?.image && (
-                  <div className="w-24 h-24 flex-shrink-0 rounded-md overflow-hidden border border-border bg-white">
-                    <Media
-                      resource={data?.post.meta?.image || undefined}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
-                <div className="flex flex-col">
-                  <span className="font-medium">Date Booked: {formatDateTime(data?.post.createdAt)}</span>
-                  <span className="font-medium">Guests: {Array.isArray(data?.guests) ? data.guests.length : 0}</span>
-                  {data?.packageType && (
-                    <div className="mt-2 p-3 bg-secondary/50 rounded-lg">
-                      <div className="font-medium text-sm text-primary mb-1">Package Purchased</div>
-                      {(() => {
-                        const packageInfo = getPackageDetails(data.packageType);
-                        if (packageInfo) {
-                          return (
-                            <div className="space-y-1">
-                              <div className="font-semibold">{packageInfo.name}</div>
-                              <div className="text-sm text-muted-foreground">{packageInfo.description}</div>
-                              <div className="text-xs">
-                                <div className="font-medium mb-1">Includes:</div>
-                                <ul className="list-disc list-inside space-y-0.5">
-                                  {packageInfo.features.map((feature, idx) => (
-                                    <li key={idx}>{feature}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          );
-                        } else {
-                          return (
-                            <div className="font-medium">
-                              {data.packageType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                            </div>
-                          );
-                        }
-                      })()}
+            <div className="flex flex-col gap-5">
+              <Card className="w-full">
+                <CardHeader>
+                  <CardTitle>Booking Summary</CardTitle>
+                  <CardDescription>Your reservation information</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3 mb-4">
+                    {!!data?.post.meta?.image && (
+                      <div className="w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border border-border bg-white">
+                        <Media
+                          resource={data?.post.meta?.image || undefined}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <h1 className="text-2xl font-bold">{data?.post.title}</h1>
+                      <span className="font-medium">Date Booked: {formatDateTime(data?.post.createdAt)}</span>
+                      <span className="font-medium">Guests: {Array.isArray(data?.guests) ? data.guests.length : 0}</span>
                     </div>
+                  </div>
+                  
+                  {data?.packageType && (
+                    <Card className="border-primary/20 bg-primary/5">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm text-primary">Package Purchased</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        {(() => {
+                          const packageInfo = getPackageDetails(data.packageType);
+                          if (packageInfo) {
+                            return (
+                              <div className="space-y-2">
+                                <div className="font-semibold">{packageInfo.name}</div>
+                                <div className="text-sm text-muted-foreground">{packageInfo.description}</div>
+                                <div className="text-xs">
+                                  <div className="font-medium mb-1">Includes:</div>
+                                  <ul className="list-disc list-inside space-y-0.5">
+                                    {packageInfo.features.map((feature, idx) => (
+                                      <li key={idx}>{feature}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="font-medium">
+                                {data.packageType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </div>
+                            );
+                          }
+                        })()}
+                      </CardContent>
+                    </Card>
                   )}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="w-full">
+                <CardHeader>
+                  <CardTitle className="text-xl">Booking Dates</CardTitle>
+                  <CardDescription>Your confirmed stay dates</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-4">
+                    <Calendar
+                      mode="range"
+                      selected={{
+                        from: data?.fromDate ? new Date(data.fromDate) : undefined,
+                        to: data?.toDate ? new Date(data.toDate) : undefined,
+                      }}
+                      numberOfMonths={2}
+                      className="max-w-md mx-auto"
+                      disabled={() => true}
+                    />
+                    <div className="text-muted-foreground text-sm text-center">
+                      {data?.fromDate && data?.toDate
+                        ? `From ${formatDateTime(data.fromDate)} to ${formatDateTime(data.toDate)}`
+                        : 'Select a start and end date'}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           ) : (
             <div>Error loading booking details</div>

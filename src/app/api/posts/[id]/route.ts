@@ -180,16 +180,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (body.packageTypes !== undefined && Array.isArray(body.packageTypes)) {
       cleanData.packageTypes = body.packageTypes
         .filter((pkg: any) => pkg && typeof pkg === 'object' && pkg.name && pkg.price !== undefined)
-        .map((pkg: any) => ({
-          name: String(pkg.name || '').trim(),
-          description: String(pkg.description || '').trim(),
-          price: Number(pkg.price) || 0,
-          multiplier: Number(pkg.multiplier) || 1,
-          features: Array.isArray(pkg.features) 
-            ? pkg.features.filter((f: any) => f && typeof f === 'string').map((f: string) => ({ feature: f.trim() }))
-            : [],
-          revenueCatId: String(pkg.revenueCatId || '').trim(),
-        }))
+        .map((pkg: any) => {
+          // Handle features array safely to prevent circular references
+          let features = []
+          if (Array.isArray(pkg.features)) {
+            features = pkg.features
+              .filter((f: any) => f && (typeof f === 'string' || (typeof f === 'object' && f.feature)))
+              .map((f: any) => {
+                if (typeof f === 'string') {
+                  return { feature: f.trim() }
+                } else if (typeof f === 'object' && f.feature) {
+                  return { feature: String(f.feature).trim() }
+                }
+                return null
+              })
+              .filter(Boolean)
+          }
+          
+          return {
+            name: String(pkg.name || '').trim(),
+            description: String(pkg.description || '').trim(),
+            price: Number(pkg.price) || 0,
+            multiplier: Number(pkg.multiplier) || 1,
+            features: features,
+            revenueCatId: String(pkg.revenueCatId || '').trim(),
+            templateId: pkg.templateId ? String(pkg.templateId).trim() : undefined,
+            category: pkg.category ? String(pkg.category).trim() : undefined,
+            minNights: pkg.minNights !== undefined ? Number(pkg.minNights) : undefined,
+            maxNights: pkg.maxNights !== undefined ? Number(pkg.maxNights) : undefined,
+            isHosted: pkg.isHosted !== undefined ? Boolean(pkg.isHosted) : undefined,
+          }
+        })
         .filter((pkg: any) => pkg.name && pkg.price >= 0)
     }
 

@@ -286,21 +286,70 @@ export interface Post {
    */
   baseRate?: number | null;
   /**
-   * Available packages for this plek
+   * Available packages for this plek. You can select from templates or create custom packages.
    */
   packageTypes?:
     | {
+        /**
+         * Select a package template from the centralized system (optional)
+         */
+        templateId?:
+          | (
+              | 'per_night'
+              | 'luxury_night'
+              | 'three_nights'
+              | 'hosted_3nights'
+              | 'weekly'
+              | 'hosted_weekly'
+              | 'monthly'
+              | 'wine_package'
+            )
+          | null;
+        /**
+         * Package name (will be auto-filled if using a template)
+         */
         name: string;
+        /**
+         * Package description (will be auto-filled if using a template)
+         */
         description?: string | null;
+        /**
+         * Price for this package (can override template pricing)
+         */
         price: number;
+        /**
+         * Price multiplier applied to base rate
+         */
         multiplier: number;
+        /**
+         * Package features (will be auto-filled if using a template)
+         */
         features?:
           | {
               feature?: string | null;
               id?: string | null;
             }[]
           | null;
+        /**
+         * RevenueCat package identifier (will be auto-filled if using a template)
+         */
         revenueCatId?: string | null;
+        /**
+         * Package category for organization
+         */
+        category?: ('standard' | 'luxury' | 'hosted' | 'specialty') | null;
+        /**
+         * Minimum number of nights for this package
+         */
+        minNights?: number | null;
+        /**
+         * Maximum number of nights for this package
+         */
+        maxNights?: number | null;
+        /**
+         * Whether this package includes hosted services
+         */
+        isHosted?: boolean | null;
         id?: string | null;
       }[]
     | null;
@@ -1345,6 +1394,7 @@ export interface PostsSelect<T extends boolean = true> {
   packageTypes?:
     | T
     | {
+        templateId?: T;
         name?: T;
         description?: T;
         price?: T;
@@ -1356,6 +1406,10 @@ export interface PostsSelect<T extends boolean = true> {
               id?: T;
             };
         revenueCatId?: T;
+        category?: T;
+        minNights?: T;
+        maxNights?: T;
+        isHosted?: T;
         id?: T;
       };
   slug?: T;
