@@ -361,69 +361,94 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         console.log('Found RevenueCat package:', estimatePackage ? 'Yes' : 'No')
       }
 
-      // Only require RevenueCat package if offerings are loaded and we expect one
-      if (offerings.length > 0 && !estimatePackage) {
-        console.warn(`RevenueCat package not found for ${selectedPackageDetails.revenueCatId}, proceeding without payment`)
-      }
+      // Track payment success status
+      let paymentProcessed = false
+      let purchaseResult = null
 
       // --- RevenueCat Payment Flow (if available) ---
       if (estimatePackage && estimatePackage.webBillingProduct) {
         try {
           console.log('Processing RevenueCat purchase...')
-          const purchaseResult = await Purchases.getSharedInstance().purchase({
+          purchaseResult = await Purchases.getSharedInstance().purchase({
             rcPackage: estimatePackage,
           })
           console.log("RevenueCat purchase successful:", purchaseResult)
-        } catch (purchaseError) {
-          // Comprehensive error handling for cancellations, network errors, etc.
+          paymentProcessed = true
+        } catch (purchaseError: any) {
+          console.error('RevenueCat purchase failed:', purchaseError)
+          
+          // Handle specific RevenueCat error types
+          if (purchaseError.code === ErrorCode.UserCancelledError) {
+            throw new Error('Payment was cancelled. Please try again if you wish to complete your booking.')
+          } else if (purchaseError.code === ErrorCode.PaymentPendingError) {
+            throw new Error('Payment is pending. Please check your payment method and try again.')
+          } else if (purchaseError.code === ErrorCode.PurchaseNotAllowedError) {
+            throw new Error('Purchase not allowed. Please check your account settings.')
+          } else if (purchaseError.code === ErrorCode.PurchaseInvalidError) {
+            throw new Error('Invalid purchase. Please try selecting a different package.')
+          } else if (purchaseError.code === ErrorCode.NetworkError) {
+            throw new Error('Network error during payment. Please check your connection and try again.')
+          } else {
+            // For any other error, throw a general payment error
+            throw new Error(`Payment failed: ${purchaseError.message || 'Unknown error'}. Please try again.`)
+          }
         }
+      } else if (offerings.length > 0) {
+        // If we have offerings but no matching package, this is an error
+        throw new Error(`Payment package not found for ${selectedPackageDetails.title}. Please contact support.`)
       } else {
-        // If no RevenueCat package is available, proceed without payment processing
-        console.log("No RevenueCat package available, proceeding with estimate confirmation only")
+        // If no RevenueCat offerings are loaded, warn but allow to proceed
+        console.warn("No RevenueCat offerings available, proceeding with estimate confirmation only")
       }
 
-      // After successful purchase (or if no RevenueCat), confirm the estimate in backend
-      const estimateData = {
-        postId: _postId,
-        fromDate: data.fromDate,
-        toDate: data.toDate,
-        guests: Array.isArray(data.guests) ? data.guests.map(g => typeof g === 'string' ? g : g.id) : [],
-        baseRate: finalTotal,
-        duration: selectedDuration,
-        customer: user.id,
-        packageType: selectedPackage,
-        isWineSelected,
-        totalAmount: finalTotal,
-      }
-      
-      console.log('Confirming estimate with data:', estimateData)
-      
-      const response = await fetch(`/api/estimates/${data.id}/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(estimateData),
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Estimate confirmation error:', errorData)
-        throw new Error(errorData.error || 'Failed to confirm estimate')
-      }
-      
-      const result = await response.json()
-      console.log('Estimate confirmation result:', result)
-      setPaymentSuccess(true)
-      
-      // Check if a booking was created and redirect accordingly
-      if (result.booking && result.booking.id) {
-        setTimeout(() => {
-          router.push(`/booking-confirmation?bookingId=${result.booking.id}`)
-        }, 1500)
+      // Only proceed with booking creation if payment was successful OR no payment was required
+      if (paymentProcessed || offerings.length === 0) {
+        // After successful purchase (or if no RevenueCat), confirm the estimate in backend
+        const estimateData = {
+          postId: _postId,
+          fromDate: data.fromDate,
+          toDate: data.toDate,
+          guests: Array.isArray(data.guests) ? data.guests.map(g => typeof g === 'string' ? g : g.id) : [],
+          baseRate: finalTotal,
+          duration: selectedDuration,
+          customer: user.id,
+          packageType: selectedPackage,
+          isWineSelected,
+          totalAmount: finalTotal,
+          revenueCatPurchaseResult: purchaseResult // Include purchase details
+        }
+        
+        console.log('Confirming estimate with data:', estimateData)
+        
+        const response = await fetch(`/api/estimates/${data.id}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(estimateData),
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          console.error('Estimate confirmation error:', errorData)
+          throw new Error(errorData.error || 'Failed to confirm estimate')
+        }
+        
+        const result = await response.json()
+        console.log('Estimate confirmation result:', result)
+        setPaymentSuccess(true)
+        
+        // Check if a booking was created and redirect accordingly
+        if (result.booking && result.booking.id) {
+          setTimeout(() => {
+            router.push(`/booking-confirmation?bookingId=${result.booking.id}`)
+          }, 1500)
+        } else {
+          // Fallback to the original redirect if no booking ID is available
+          setTimeout(() => {
+            router.push(`/booking-confirmation?total=${finalTotal}&duration=${selectedDuration}`)
+          }, 1500)
+        }
       } else {
-        // Fallback to the original redirect if no booking ID is available
-        setTimeout(() => {
-          router.push(`/booking-confirmation?total=${finalTotal}&duration=${selectedDuration}`)
-        }, 1500)
+        throw new Error('Payment processing failed. No booking was created.')
       }
     } catch (error) {
       console.error('Complete estimate error:', error)
