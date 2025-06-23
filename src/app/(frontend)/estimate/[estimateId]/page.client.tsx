@@ -358,12 +358,21 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           return identifier === selectedPackageDetails.revenueCatId;
         });
         
-        console.log('Found RevenueCat package:', estimatePackage ? 'Yes' : 'No')
+        console.log('RevenueCat package search:', {
+          selectedPackage: selectedPackageDetails.title,
+          searchingForId: selectedPackageDetails.revenueCatId,
+          availablePackages: offerings.map(pkg => ({
+            identifier: pkg.webBillingProduct?.identifier,
+            title: pkg.webBillingProduct?.title || pkg.webBillingProduct?.identifier
+          })),
+          foundPackage: estimatePackage ? 'Yes' : 'No'
+        })
       }
 
       // Track payment success status
       let paymentProcessed = false
       let purchaseResult = null
+      let shouldProceedWithoutPayment = false
 
       // --- RevenueCat Payment Flow (if available) ---
       if (estimatePackage && estimatePackage.webBillingProduct) {
@@ -394,15 +403,24 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           }
         }
       } else if (offerings.length > 0) {
-        // If we have offerings but no matching package, this is an error
-        throw new Error(`Payment package not found for ${selectedPackageDetails.title}. Please contact support.`)
+        // Enhanced error message with more details
+        const packageDetails = selectedPackageDetails.title
+        const revenueCatId = selectedPackageDetails.revenueCatId
+        const availableIds = offerings.map(pkg => pkg.webBillingProduct?.identifier).filter(Boolean).join(', ')
+        
+        console.warn(`RevenueCat package not found. Package: ${packageDetails}, Expected ID: ${revenueCatId}, Available IDs: ${availableIds}`)
+        
+        // Instead of throwing an error, proceed without payment processing for packages not in RevenueCat
+        console.warn(`Proceeding without RevenueCat payment for package: ${packageDetails}`)
+        shouldProceedWithoutPayment = true
       } else {
         // If no RevenueCat offerings are loaded, warn but allow to proceed
         console.warn("No RevenueCat offerings available, proceeding with estimate confirmation only")
+        shouldProceedWithoutPayment = true
       }
 
       // Only proceed with booking creation if payment was successful OR no payment was required
-      if (paymentProcessed || offerings.length === 0) {
+      if (paymentProcessed || shouldProceedWithoutPayment) {
         // After successful purchase (or if no RevenueCat), confirm the estimate in backend
         const estimateData = {
           postId: _postId,

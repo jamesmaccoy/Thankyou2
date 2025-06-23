@@ -55,7 +55,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
       "Premium accommodation",
       "Priority service"
     ],
-    revenueCatId: "luxury_night",
+    revenueCatId: "per_night_luxury",
     minNights: 1,
     maxNights: 1,
     isHosted: true,
@@ -113,7 +113,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
       "Flexible project scheduling",
       "Priority booking for future stays"
     ],
-    revenueCatId: "weekly",
+    revenueCatId: "Weekly",
     minNights: 7,
     maxNights: 7,
     category: 'standard'
@@ -174,7 +174,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
       "Premium glassware provided",
       "Wine education sessions"
     ],
-    revenueCatId: "wine_sommelier",
+    revenueCatId: "Bottle_wine",
     category: 'specialty'
   }
 } as const
