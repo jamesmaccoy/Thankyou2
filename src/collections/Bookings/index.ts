@@ -1,12 +1,12 @@
 import { adminOrSelfField } from '@/access/adminOrSelfField'
-import { isAdmin } from '@/access/isAdmin'
 import { isAdminField } from '@/access/isAdminField'
 import { slugField } from '@/fields/slug'
 import type { CollectionConfig } from 'payload'
-import { adminOrSelfOrGuests } from './access/adminOrSelfOrGuests'
+
 import { generateJwtToken, verifyJwtToken } from '@/utilities/token'
 import { unavailableDates } from './endpoints/unavailable-dates'
 import { checkAvailability } from './endpoints/check-availability'
+import { checkAvailabilityHook } from './hooks/checkAvailability'
 
 export const Booking: CollectionConfig = {
   slug: 'bookings',
@@ -477,6 +477,9 @@ export const Booking: CollectionConfig = {
     //   return false
     // },
   },
+  hooks: {
+    beforeChange: [checkAvailabilityHook],
+  },
   fields: [
     {
       name: 'title',
@@ -491,11 +494,11 @@ export const Booking: CollectionConfig = {
       name: 'customer',
       type: 'relationship',
       relationTo: 'users',
-      filterOptions: {
-        role: {
-          equals: 'customer',
-        },
-      },
+      // filterOptions: {
+      //   role: {
+      //     equals: 'customer',
+      //   },
+      // },
       access: {
         update: isAdminField,
       },
@@ -504,7 +507,7 @@ export const Booking: CollectionConfig = {
       name: 'token',
       label: 'Token',
       type: 'text',
-      required: true,
+      required: false,
       admin: {
         readOnly: true,
         hidden: true,

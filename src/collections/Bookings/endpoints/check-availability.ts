@@ -57,39 +57,10 @@ export const checkAvailability: Endpoint = {
       const bookings = await req.payload.find({
         collection: 'bookings',
         where: {
-          post: {
-            equals: resolvedPostId,
-          },
-          or: [
-            // Case 1: Booking starts within requested range
-            {
-              fromDate: {
-                greater_than_equal: startFormatted,
-                less_than_equal: endFormatted,
-              },
-            },
-            // Case 2: Booking ends within requested range
-            {
-              toDate: {
-                greater_than_equal: startFormatted,
-                less_than_equal: endFormatted,
-              },
-            },
-            // Case 3: Booking completely surrounds requested range
-            {
-              and: [
-                {
-                  fromDate: {
-                    less_than_equal: startFormatted,
-                  },
-                },
-                {
-                  toDate: {
-                    greater_than_equal: endFormatted,
-                  },
-                },
-              ],
-            },
+          and: [
+            { post: { equals: resolvedPostId } },
+            { fromDate: { less_than_equal: endFormatted } },
+            { toDate: { greater_than_equal: startFormatted } },
           ],
         },
         limit: 1,
