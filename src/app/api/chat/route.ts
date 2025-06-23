@@ -87,7 +87,7 @@ export async function POST(req: Request) {
               Estimates:
               ${JSON.stringify(context.estimates, null, 2)}
               
-              Help users with their bookings and provide information about estimates based on their actual data, but il never read out the booking or estimate IDs, but remain knowlagable about the package types and features.`,
+              Help users with their bookings and provide information about estimates based on their actual data. Don't use asterisks in your response, only speak words and skip symbols. Never read out booking or estimate IDs, but remain knowledgeable about the package types and features. For estimate details, provide links as <a href="${process.env.NEXT_PUBLIC_URL}/estimates/[id]">click here</a>. If there are duplicate estimates, list only once.`,
             },
           ],
         },

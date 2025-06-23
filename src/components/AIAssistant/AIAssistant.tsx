@@ -261,18 +261,21 @@ export const AIAssistant = () => {
           <div className="p-4 border-b">
             <h3 className="font-semibold">AI Assistant</h3>
           </div>
-          <ScrollArea ref={scrollRef} className="h-[400px] p-4">
+          <ScrollArea ref={scrollRef} className="h-[340px] p-4">
             {messages.map((message, index) => (
               <div
                 key={index}
                 className={cn(
-                  'mb-4 p-3 rounded-lg',
+                  'mb-4 p-3 rounded-lg break-words max-w-[85%]',
                   message.role === 'user'
                     ? 'bg-primary text-primary-foreground ml-auto'
                     : 'bg-muted',
                 )}
               >
-                {message.content}
+                <p
+                  className="text-sm"
+                  dangerouslySetInnerHTML={{ __html: message.content.replace(/\n/g, '<br />') }}
+                />
               </div>
             ))}
             {isLoading && (
