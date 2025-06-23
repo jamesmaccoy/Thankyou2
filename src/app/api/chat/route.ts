@@ -87,7 +87,7 @@ export async function POST(req: Request) {
               Estimates:
               ${JSON.stringify(context.estimates, null, 2)}
               
-              Help users with their bookings and provide information about estimates based on their actual data.`,
+              Help users with their bookings and provide information about estimates based on their actual data, but il never read out the booking or estimate IDs, but remain knowlagable about the package types and features.`,
             },
           ],
         },
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
           role: 'model',
           parts: [
             {
-              text: 'I understand. I will help users with their bookings and provide information about estimates based on their actual data. I can assist with checking booking status, viewing estimates, and answering related questions.',
+              text: 'I understand. I will help users with their bookings and provide information about estimates based on their actual data. I can assist with checking booking status, viewing estimates, and answering related questions. I will never read out the booking or estimate IDs, but rather use the title, fromDate, toDate, and status to assume an action like "Update booking" or "Update estimate". I will also know the package types and features the user has selected and purchased, and intuativly compare the different package types and features they could still purchase, further improving their bookings experience.',
             },
           ],
         },

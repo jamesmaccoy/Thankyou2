@@ -161,6 +161,63 @@ export interface Booking {
   paymentStatus?: ('paid' | 'unpaid') | null;
   fromDate: string;
   toDate: string;
+  /**
+   * The ID of the package type (e.g., per_night, luxury_night, hosted_3nights)
+   */
+  packageType?: string | null;
+  /**
+   * Detailed information about the purchased package
+   */
+  packageDetails?: {
+    /**
+     * Human-readable name of the package
+     */
+    name?: string | null;
+    /**
+     * Description of what the package includes
+     */
+    description?: string | null;
+    /**
+     * Multiplier applied to base rate
+     */
+    multiplier?: number | null;
+    features?:
+      | {
+          feature: string;
+          id?: string | null;
+        }[]
+      | null;
+    /**
+     * RevenueCat package identifier
+     */
+    revenueCatId?: string | null;
+    category?: ('standard' | 'luxury' | 'hosted' | 'specialty') | null;
+    /**
+     * Whether this package includes hosted services
+     */
+    isHosted?: boolean | null;
+  };
+  /**
+   * Pricing details for this booking
+   */
+  pricing?: {
+    /**
+     * Base rate before package multiplier
+     */
+    baseRate?: number | null;
+    /**
+     * Rate after applying package multiplier
+     */
+    packageRate?: number | null;
+    /**
+     * Number of nights for this booking
+     */
+    totalNights?: number | null;
+    /**
+     * Final total amount for the booking
+     */
+    totalAmount?: number | null;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -224,7 +281,78 @@ export interface Post {
         name?: string | null;
       }[]
     | null;
+  /**
+   * Base rate per night in USD
+   */
   baseRate?: number | null;
+  /**
+   * Available packages for this plek. You can select from templates or create custom packages.
+   */
+  packageTypes?:
+    | {
+        /**
+         * Select a package template from the centralized system (optional)
+         */
+        templateId?:
+          | (
+              | 'per_night'
+              | 'luxury_night'
+              | 'three_nights'
+              | 'hosted_3nights'
+              | 'weekly'
+              | 'hosted_weekly'
+              | 'monthly'
+              | 'wine_package'
+            )
+          | null;
+        /**
+         * Package name (will be auto-filled if using a template)
+         */
+        name: string;
+        /**
+         * Package description (will be auto-filled if using a template)
+         */
+        description?: string | null;
+        /**
+         * Price for this package (can override template pricing)
+         */
+        price: number;
+        /**
+         * Price multiplier applied to base rate
+         */
+        multiplier: number;
+        /**
+         * Package features (will be auto-filled if using a template)
+         */
+        features?:
+          | {
+              feature?: string | null;
+              id?: string | null;
+            }[]
+          | null;
+        /**
+         * RevenueCat package identifier (will be auto-filled if using a template)
+         */
+        revenueCatId?: string | null;
+        /**
+         * Package category for organization
+         */
+        category?: ('standard' | 'luxury' | 'hosted' | 'specialty') | null;
+        /**
+         * Minimum number of nights for this package
+         */
+        minNights?: number | null;
+        /**
+         * Maximum number of nights for this package
+         */
+        maxNights?: number | null;
+        /**
+         * Whether this package includes hosted services
+         */
+        isHosted?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -1053,6 +1181,31 @@ export interface BookingsSelect<T extends boolean = true> {
   paymentStatus?: T;
   fromDate?: T;
   toDate?: T;
+  packageType?: T;
+  packageDetails?:
+    | T
+    | {
+        name?: T;
+        description?: T;
+        multiplier?: T;
+        features?:
+          | T
+          | {
+              feature?: T;
+              id?: T;
+            };
+        revenueCatId?: T;
+        category?: T;
+        isHosted?: T;
+      };
+  pricing?:
+    | T
+    | {
+        baseRate?: T;
+        packageRate?: T;
+        totalNights?: T;
+        totalAmount?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1238,6 +1391,27 @@ export interface PostsSelect<T extends boolean = true> {
         name?: T;
       };
   baseRate?: T;
+  packageTypes?:
+    | T
+    | {
+        templateId?: T;
+        name?: T;
+        description?: T;
+        price?: T;
+        multiplier?: T;
+        features?:
+          | T
+          | {
+              feature?: T;
+              id?: T;
+            };
+        revenueCatId?: T;
+        category?: T;
+        minNights?: T;
+        maxNights?: T;
+        isHosted?: T;
+        id?: T;
+      };
   slug?: T;
   slugLock?: T;
   updatedAt?: T;

@@ -5,6 +5,7 @@ import { getPayload } from "payload"
 import config from "@payload-config"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ConfettiCelebration } from "./confetti-celebration"
 
 export default async function BookingConfirmationPage({
   searchParams,
@@ -55,6 +56,7 @@ export default async function BookingConfirmationPage({
   
   return (
     <div className="container py-10">
+      <ConfettiCelebration />
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold tracking-tighter mb-4">Booking Confirmed!</h1>

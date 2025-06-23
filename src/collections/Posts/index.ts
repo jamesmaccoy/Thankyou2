@@ -26,7 +26,8 @@ import {
   OverviewField,
   PreviewField,
 } from '@payloadcms/plugin-seo/fields'
-import { slugField } from '@/fields/slug'
+import { slugField } from '../../fields/slug'
+import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
 
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
@@ -248,16 +249,135 @@ export const Posts: CollectionConfig<'posts'> = {
     {
       name: 'baseRate',
       type: 'number',
-      label: 'Base Rate (per night)',
-      required: false,
-      min: 0,
       admin: {
         position: 'sidebar',
+        description: 'Base rate per night in USD',
       },
+      defaultValue: 150,
+    },
+    {
+      name: 'packageTypes',
+      type: 'array',
+      admin: {
+        position: 'sidebar',
+        description: 'Available packages for this plek. You can select from templates or create custom packages.',
+      },
+      fields: [
+        {
+          name: 'templateId',
+          type: 'select',
+          label: 'Package Template',
+          admin: {
+            description: 'Select a package template from the centralized system (optional)',
+          },
+          options: Object.entries(PACKAGE_TYPES).map(([key, template]) => ({
+            label: template.name,
+            value: key,
+          })),
+        },
+        {
+          name: 'name',
+          type: 'text',
+          required: true,
+          admin: {
+            description: 'Package name (will be auto-filled if using a template)',
+          },
+        },
+        {
+          name: 'description',
+          type: 'textarea',
+          admin: {
+            description: 'Package description (will be auto-filled if using a template)',
+          },
+        },
+        {
+          name: 'price',
+          type: 'number',
+          required: true,
+          admin: {
+            description: 'Price for this package (can override template pricing)',
+          },
+        },
+        {
+          name: 'multiplier',
+          type: 'number',
+          required: true,
+          defaultValue: 1,
+          admin: {
+            description: 'Price multiplier applied to base rate',
+          },
+        },
+        {
+          name: 'features',
+          type: 'array',
+          admin: {
+            description: 'Package features (will be auto-filled if using a template)',
+          },
+          fields: [
+            {
+              name: 'feature',
+              type: 'text',
+            },
+          ],
+        },
+        {
+          name: 'revenueCatId',
+          type: 'text',
+          admin: {
+            description: 'RevenueCat package identifier (will be auto-filled if using a template)',
+          },
+        },
+        {
+          name: 'category',
+          type: 'select',
+          label: 'Package Category',
+          admin: {
+            description: 'Package category for organization',
+          },
+          options: [
+            { label: 'Standard', value: 'standard' },
+            { label: 'Luxury', value: 'luxury' },
+            { label: 'Hosted', value: 'hosted' },
+            { label: 'Specialty', value: 'specialty' },
+          ],
+          defaultValue: 'standard',
+        },
+        {
+          name: 'minNights',
+          type: 'number',
+          label: 'Minimum Nights',
+          admin: {
+            description: 'Minimum number of nights for this package',
+          },
+        },
+        {
+          name: 'maxNights',
+          type: 'number',
+          label: 'Maximum Nights',
+          admin: {
+            description: 'Maximum number of nights for this package',
+          },
+        },
+        {
+          name: 'isHosted',
+          type: 'checkbox',
+          label: 'Hosted Package',
+          admin: {
+            description: 'Whether this package includes hosted services',
+          },
+        },
+      ],
     },
     ...slugField(),
   ],
   hooks: {
+    beforeChange: [
+      (args) => {
+        // Removed auto-population to prevent recursion issues
+        // Package template selection can be handled in the frontend
+        return args.data
+      },
+    ],
     afterChange: [revalidatePost],
     afterRead: [populateAuthors],
     afterDelete: [revalidateDelete],
@@ -265,8 +385,10 @@ export const Posts: CollectionConfig<'posts'> = {
   versions: {
     drafts: {
       autosave: {
-        interval: 100, // We set this interval for optimal live preview
+        interval: 2000, // Increased from 100ms to 2000ms to reduce conflicts
       },
+      // Alternative: disable autosave entirely to avoid conflicts
+      // autosave: false,
       schedulePublish: true,
     },
     maxPerDoc: 50,
