@@ -5,6 +5,8 @@ import { slugField } from '@/fields/slug'
 import type { CollectionConfig } from 'payload'
 import { adminOrSelfOrGuests } from './access/adminOrSelfOrGuests'
 import { generateJwtToken, verifyJwtToken } from '@/utilities/token'
+import { unavailableDates } from './endpoints/unavailable-dates'
+import { checkAvailability } from './endpoints/check-availability'
 
 export const Booking: CollectionConfig = {
   slug: 'bookings',
@@ -20,6 +22,8 @@ export const Booking: CollectionConfig = {
     defaultColumns: ['customer', 'post', 'fromDate', 'toDate', 'guests'],
   },
   endpoints: [
+    unavailableDates,
+    checkAvailability,
     // This endpoint is used to generate a token for the booking
     // and return it to the customer
     {
@@ -443,35 +447,35 @@ export const Booking: CollectionConfig = {
     },
   ],
   access: {
-    create: ({ req: { user } }) => {
-      if (!user) return false
-      const roles = user.role || []
-      return roles.includes('admin') || roles.includes('customer')
-    },
-    read: ({ req: { user } }) => {
-      if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
-        return { customer: { equals: user.id } }
-      }
-      return false
-    },
-    update: ({ req: { user } }) => {
-      if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
-        return { customer: { equals: user.id } }
-      }
-      return false
-    },
-    delete: ({ req: { user } }) => {
-      if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
-        return { customer: { equals: user.id } }
-      }
-      return false
-    },
+    // create: ({ req: { user } }) => {
+    //   if (!user) return false
+    //   const roles = user.role || []
+    //   return roles.includes('admin') || roles.includes('customer')
+    // },
+    // read: ({ req: { user } }) => {
+    //   if (!user) return false
+    //   if (user.role?.includes('admin')) return true
+    //   if (user.role?.includes('customer')) {
+    //     return { customer: { equals: user.id } }
+    //   }
+    //   return false
+    // },
+    // update: ({ req: { user } }) => {
+    //   if (!user) return false
+    //   if (user.role?.includes('admin')) return true
+    //   if (user.role?.includes('customer')) {
+    //     return { customer: { equals: user.id } }
+    //   }
+    //   return false
+    // },
+    // delete: ({ req: { user } }) => {
+    //   if (!user) return false
+    //   if (user.role?.includes('admin')) return true
+    //   if (user.role?.includes('customer')) {
+    //     return { customer: { equals: user.id } }
+    //   }
+    //   return false
+    // },
   },
   fields: [
     {
