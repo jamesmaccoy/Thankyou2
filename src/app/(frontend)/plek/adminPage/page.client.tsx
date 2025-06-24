@@ -46,7 +46,7 @@ interface PostFormData {
   categories: string[]
   heroImage?: string
   publishedAt?: string
-  _status: 'draft' | 'published'
+  _status: 'draft' | 'published' | 'pending'
   packageTypes: PackageType[]
   baseRate: number | ''
   meta: {
@@ -784,6 +784,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     
     if (isPublished) {
       return <Badge variant="default" className="bg-green-100 text-green-800">Published</Badge>
+    } else if (status === 'pending') {
+      return <Badge variant="secondary" className="bg-amber-100 text-amber-800">Pending Approval</Badge>
     } else {
       return <Badge variant="secondary">Draft</Badge>
     }
@@ -830,6 +832,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       })
       .catch(err => console.error('Failed to fetch total visitors:', err))
   }, [])
+
+  // Check if user is admin for approval permissions
+  const isAdmin = user.role?.includes('admin') || false
 
   return (
     <div className="container max-w-7xl mx-auto py-8">
@@ -993,6 +998,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
             onAddPackageType={addPackageType}
             onRemovePackageType={removePackageType}
             onAddPackageTemplate={addPackageTemplate}
+            isAdmin={isAdmin}
           />
           
           <DialogFooter>
@@ -1031,6 +1037,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
             onRemovePackageType={removePackageType}
             onAddPackageTemplate={addPackageTemplate}
             isEditing={true}
+            isAdmin={isAdmin}
           />
           
           <DialogFooter>
@@ -1403,7 +1410,8 @@ function PostForm({
   onAddPackageType,
   onRemovePackageType,
   onAddPackageTemplate,
-  isEditing = false 
+  isEditing = false,
+  isAdmin = false
 }: {
   formData: PostFormData
   setFormData: (data: PostFormData) => void
@@ -1418,6 +1426,7 @@ function PostForm({
   onRemovePackageType: (idx: number) => void
   onAddPackageTemplate: (templateKey: string) => void
   isEditing?: boolean
+  isAdmin?: boolean
 }) {
   return (
     <div className="space-y-6">
@@ -1546,16 +1555,60 @@ function PostForm({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Switch
-              id="publish"
-              checked={formData._status === 'published'}
-              onCheckedChange={(checked) => 
-                updateFormData({ _status: checked ? 'published' : 'draft' })
-              }
-            />
-            <Label htmlFor="publish">
-              {formData._status === 'published' ? 'Publish immediately' : 'Save as draft'}
-            </Label>
+            {/* Enhanced publish controls based on user role */}
+            {isAdmin ? (
+              // Admin: Full control over status
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="publish"
+                    checked={formData._status === 'published'}
+                    onCheckedChange={(checked) => 
+                      updateFormData({ _status: checked ? 'published' : 'draft' })
+                    }
+                  />
+                  <Label htmlFor="publish">
+                    {formData._status === 'published' ? 'Published (Live)' : 'Save as draft'}
+                  </Label>
+                </div>
+                {formData._status === 'published' && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    ✓ This post will be immediately visible to visitors
+                  </p>
+                )}
+              </div>
+            ) : (
+              // Non-admin: Request approval workflow
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="requestApproval"
+                    checked={formData._status === 'pending'}
+                    onCheckedChange={(checked) => 
+                      updateFormData({ _status: checked ? 'pending' : 'draft' })
+                    }
+                  />
+                  <Label htmlFor="requestApproval">
+                    {formData._status === 'pending' ? 'Submitted for approval' : 'Save as draft'}
+                  </Label>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {formData._status === 'pending' ? (
+                    <p className="text-amber-600 flex items-center gap-1">
+                      ⏳ Waiting for admin approval before publishing
+                    </p>
+                  ) : formData._status === 'published' ? (
+                    <p className="text-green-600 flex items-center gap-1">
+                      ✓ This post is live and approved
+                    </p>
+                  ) : (
+                    <p>
+                      Submit for approval when ready to publish. Admins will review before making it live.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
