@@ -145,12 +145,35 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
   // Auto-generate SEO meta fields from form data
   const autoInferSEOMeta = useCallback((formData: PostFormData) => {
-    // Extract text content properly from Lexical content structure
+    // Extract text content properly from both string and Lexical content structure
     const extractTextContent = (content: any): string => {
-      if (!content) return ''
+      console.log('extractTextContent called with:', {
+        content,
+        type: typeof content,
+        isArray: Array.isArray(content),
+        hasRoot: content && typeof content === 'object' && !!content.root
+      })
       
-      // Handle Lexical content structure
+      if (!content) {
+        console.log('extractTextContent: No content provided')
+        return ''
+      }
+      
+      // Handle string content (from textarea)
+      if (typeof content === 'string') {
+        console.log('extractTextContent: Processing string content')
+        const cleanText = content
+          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim()
+        
+        console.log('extractTextContent: String result before truncation:', cleanText)
+        return cleanText
+      }
+      
+      // Handle Lexical content structure (fallback for complex content)
       if (typeof content === 'object' && content.root) {
+        console.log('extractTextContent: Processing Lexical content structure')
         const extractFromNode = (node: any): string => {
           if (!node) return ''
           
@@ -161,34 +184,60 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
           
           // If it has children, recursively extract text from them
           if (Array.isArray(node.children)) {
-            return node.children.map(extractFromNode).join(' ')
+            return node.children
+              .map(extractFromNode)
+              .filter((text: string) => text.trim()) // Remove empty strings
+              .join(' ') // Add space between elements to prevent concatenation
           }
           
           return ''
         }
         
         const text = extractFromNode(content.root)
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim()
         
-        // Truncate to 155 characters for description
-        return text.length > 155 
-          ? `${text.slice(0, 155)}...` 
-          : text
+        console.log('extractTextContent: Lexical result before truncation:', text)
+        return text
       }
       
-      // Fallback: if it's a string, remove HTML tags and return
-      if (typeof content === 'string') {
-        const cleanText = content.replace(/<[^>]*>/g, '')
-        return cleanText.length > 155 
-          ? `${cleanText.slice(0, 155)}...` 
-          : cleanText
+      // Handle array format (legacy Lexical format)
+      if (Array.isArray(content)) {
+        console.log('extractTextContent: Processing array format')
+        const extractFromArray = (nodes: any[]): string => {
+          return nodes
+            .map(node => {
+              if (node.text) return node.text
+              if (node.children && Array.isArray(node.children)) {
+                return extractFromArray(node.children)
+              }
+              return ''
+            })
+            .filter((text: string) => text.trim()) // Remove empty strings
+            .join(' ') // Add space between elements to prevent concatenation
+        }
+        
+        const text = extractFromArray(content)
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim()
+          
+        console.log('extractTextContent: Array result before truncation:', text)
+        return text
       }
       
+      console.log('extractTextContent: No matching content type, returning empty string')
       return ''
     }
     
+    // Extract the full text first, then truncate for description
+    const fullText = extractTextContent(formData.content)
+    const truncatedDescription = fullText.length > 155 
+      ? `${fullText.slice(0, 155)}...` 
+      : fullText
+    
     const inferredMeta = {
       title: formData.title ? `${formData.title} | Stay at our self built plek` : '',
-      description: extractTextContent(formData.content),
+      description: truncatedDescription,
       image: uploadedImages.length > 0 && uploadedImages[0] ? uploadedImages[0].id : formData.meta.image
     }
     
@@ -197,7 +246,11 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       description: inferredMeta.description,
       originalContent: formData.content,
       contentType: typeof formData.content,
-      contentStructure: formData.content && typeof formData.content === 'object' ? 'Lexical JSON' : 'String'
+      contentStructure: formData.content && typeof formData.content === 'object' ? 'Lexical JSON' : 'String',
+      fullTextExtracted: fullText,
+      fullTextLength: fullText.length,
+      truncatedDescription: truncatedDescription,
+      truncatedLength: truncatedDescription.length
     })
     
     return inferredMeta
@@ -209,9 +262,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     const inferredMeta = autoInferSEOMeta(updatedFormData)
     
     // Only auto-update if SEO fields are empty (don't override manual changes)
-    const shouldUpdateTitle = !updatedFormData.meta?.title && inferredMeta.title
-    const shouldUpdateDescription = !updatedFormData.meta?.description && inferredMeta.description
-    const shouldUpdateImage = !updatedFormData.meta?.image && inferredMeta.image
+    const shouldUpdateTitle = !formData.meta?.title && inferredMeta.title
+    const shouldUpdateDescription = !formData.meta?.description && inferredMeta.description
+    const shouldUpdateImage = !formData.meta?.image && inferredMeta.image
 
     if (shouldUpdateTitle || shouldUpdateDescription || shouldUpdateImage) {
       const metaUpdates = {
@@ -332,6 +385,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         const response = await fetch('/api/media', {
           method: 'POST',
           body: formData,
+          credentials: 'include', // Include authentication cookies
         })
 
         if (!response.ok) {
@@ -400,6 +454,16 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         packageTypesLength: processedPackageTypes.length
       })
 
+      // Get auto-inferred meta to use for fallbacks
+      const inferredMeta = autoInferSEOMeta(formData)
+      
+      console.log('=== META DEBUG ===')
+      console.log('Current formData.meta:', formData.meta)
+      console.log('Inferred meta:', inferredMeta)
+      console.log('formData.title:', formData.title)
+      console.log('formData.content:', formData.content)
+      console.log('typeof formData.content:', typeof formData.content)
+
       // Create both post and estimate
       const postData: any = {
         title: formData.title,
@@ -412,9 +476,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         // Add packageTypes to the post data
         packageTypes: processedPackageTypes,
         meta: {
-          title: formData.meta.title || formData.title,
-          description: formData.meta.description || formData.content.slice(0, 155),
-          image: formData.meta.image || (uploadedImages.length > 0 ? uploadedImages[0]?.id : undefined)
+          title: inferredMeta.title,
+          description: inferredMeta.description,
+          image: inferredMeta.image
         },
         content: {
           root: {
@@ -589,6 +653,17 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         return !isNaN(numValue) && numValue >= 0 ? numValue : undefined
       }
 
+      // Debug hero image handling
+      console.log('Hero Image Debug:', {
+        uploadedImages,
+        uploadedImagesLength: uploadedImages.length,
+        firstUploadedImage: uploadedImages[0],
+        editingPostHeroImage: editingPost.heroImage,
+        computedHeroImageId: heroImageId,
+        formDataMetaImage: formData.meta.image,
+        computedMetaImageId: metaImageId
+      })
+
       // Add packageTypes to the post data
       const rawPackageTypes = formData.packageTypes.filter(pkg => 
         pkg.name && pkg.price !== ''
@@ -602,13 +677,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         features: pkg.features.filter(f => f && f.trim()),
         revenueCatId: pkg.revenueCatId,
       }))
-
-      console.log('Package Types Processing:', {
-        originalFormDataPackageTypes: formData.packageTypes,
-        filteredRawPackageTypes: rawPackageTypes,
-        processedPackageTypes: processedPackageTypes,
-        packageTypesLength: processedPackageTypes.length
-      })
 
       const postData: any = {
         title: cleanTitle,
@@ -629,7 +697,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         meta: {
           title: cleanMetaTitle,
           description: cleanMetaDescription,
-          image: cleanMetaImage
+          image: metaImageId || '' // Use the computed meta image ID
         },
         categories: formData.categories.filter(cat => cat && typeof cat === 'string'),
         _status: formData._status,
@@ -642,9 +710,12 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         postData.baseRate = validBaseRate
       }
 
-      // Add other optional fields
+      // Add hero image - ensure it's always included if we have one
       if (heroImageId) {
         postData.heroImage = heroImageId
+        console.log('Adding hero image to post data:', heroImageId)
+      } else {
+        console.log('No hero image to add to post data')
       }
 
       const publishedAt = getPublishedAt()
@@ -688,6 +759,79 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       }
 
       const result = await response.json()
+      
+      // Enhanced debugging for API response
+      console.log('Full API response:', result)
+      console.log('Result.doc exists:', !!result.doc)
+      console.log('Result.doc type:', typeof result.doc)
+      console.log('Result.doc.heroImage:', result.doc?.heroImage)
+      console.log('Result.doc.meta:', result.doc?.meta)
+      
+      // Validate and clean the response
+      if (!result.doc || typeof result.doc !== 'object') {
+        console.error('Invalid API response structure:', result)
+        throw new Error('Invalid server response - missing or malformed post data')
+      }
+      
+      // Ensure heroImage field is properly structured
+      if (result.doc.heroImage && typeof result.doc.heroImage === 'object') {
+        console.log('Hero image object detected:', result.doc.heroImage)
+        // Make sure it has proper image structure
+        if (!result.doc.heroImage.id || !result.doc.heroImage.url) {
+          console.warn('Hero image object missing required fields:', result.doc.heroImage)
+          // Try to use the ID we sent if the response is corrupted
+          if (heroImageId) {
+            result.doc.heroImage = heroImageId
+            console.log('Fallback: Using sent hero image ID:', heroImageId)
+          }
+        }
+      } else if (result.doc.heroImage && typeof result.doc.heroImage === 'string') {
+        console.log('Hero image string detected:', result.doc.heroImage)
+        // Check if it's a weird webpack response
+        if (result.doc.heroImage.includes('webpack') || result.doc.heroImage.includes('"c":')) {
+          console.error('Webpack corruption detected in hero image field:', result.doc.heroImage)
+          // Use the fallback image ID we calculated
+          if (heroImageId) {
+            result.doc.heroImage = heroImageId
+            console.log('Fallback: Replacing corrupted hero image with:', heroImageId)
+          } else {
+            result.doc.heroImage = null
+            console.log('Fallback: Clearing corrupted hero image field')
+          }
+        }
+      }
+      
+      // Ensure meta.image field is properly structured
+      if (result.doc.meta?.image && typeof result.doc.meta.image === 'object') {
+        console.log('Meta image object detected:', result.doc.meta.image)
+        if (!result.doc.meta.image.id || !result.doc.meta.image.url) {
+          console.warn('Meta image object missing required fields:', result.doc.meta.image)
+          if (metaImageId) {
+            result.doc.meta.image = metaImageId
+            console.log('Fallback: Using sent meta image ID:', metaImageId)
+          }
+        }
+      } else if (result.doc.meta?.image && typeof result.doc.meta.image === 'string') {
+        console.log('Meta image string detected:', result.doc.meta.image)
+        if (result.doc.meta.image.includes('webpack') || result.doc.meta.image.includes('"c":')) {
+          console.error('Webpack corruption detected in meta image field:', result.doc.meta.image)
+          if (metaImageId) {
+            result.doc.meta.image = metaImageId
+            console.log('Fallback: Replacing corrupted meta image with:', metaImageId)
+          } else {
+            result.doc.meta.image = null
+            console.log('Fallback: Clearing corrupted meta image field')
+          }
+        }
+      }
+      
+      console.log('Final cleaned post data:', {
+        id: result.doc.id,
+        title: result.doc.title,
+        heroImage: result.doc.heroImage,
+        meta: result.doc.meta
+      })
+      
       setPosts(prev => prev.map(post => post.id === editingPost.id ? result.doc : post))
       setSuccess('Plek updated successfully!')
       setIsEditDialogOpen(false)
@@ -743,6 +887,33 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       return ''
     }
 
+    // Safely extract hero image ID and set up uploaded images for editing
+    const getHeroImageId = (): string => {
+      if (post.heroImage) {
+        if (typeof post.heroImage === 'string') {
+          return post.heroImage
+        }
+        if (typeof post.heroImage === 'object' && post.heroImage.id) {
+          return post.heroImage.id
+        }
+      }
+      return ''
+    }
+
+    // Set up existing hero image for display in the form
+    const setupExistingHeroImage = () => {
+      if (post.heroImage && typeof post.heroImage === 'object' && post.heroImage.id) {
+        const existingImage = {
+          id: post.heroImage.id,
+          url: post.heroImage.url || '',
+          filename: post.heroImage.filename || 'existing-hero-image'
+        }
+        setUploadedImages([existingImage])
+      } else {
+        setUploadedImages([])
+      }
+    }
+
     // Safely extract package types from post or use default
     const getPackageTypes = (): PackageType[] => {
       if (post.packageTypes && Array.isArray(post.packageTypes) && post.packageTypes.length > 0) {
@@ -764,6 +935,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       title: post.title || '',
       content: extractTextFromContent(post.content),
       categories: post.categories?.map(cat => typeof cat === 'string' ? cat : cat.id) || [],
+      heroImage: getHeroImageId(),
       _status: post._status as 'draft' | 'published' || 'draft',
       packageTypes: getPackageTypes(),
       baseRate: getBaseRate(),
@@ -773,7 +945,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         image: typeof post.meta?.image === 'string' ? post.meta.image : post.meta?.image?.id || ''
       }
     })
-    setUploadedImages([])
+    
+    // Set up existing hero image for display
+    setupExistingHeroImage()
     setIsEditDialogOpen(true)
   }
 
@@ -1458,423 +1632,446 @@ function PostForm({
   isAdmin?: boolean
 }) {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Title *</Label>
-            <Input
-              id="title"
-              value={formData.title}
-              onChange={(e) => updateFormData({ title: e.target.value })}
-              placeholder="Enter plek title..."
-            />
-          </div>
+    <Tabs defaultValue="details" className="w-full">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="details">Plek Details</TabsTrigger>
+        <TabsTrigger value="packages">Package Types</TabsTrigger>
+      </TabsList>
+      
+      <TabsContent value="details" className="space-y-6 mt-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => updateFormData({ title: e.target.value })}
+                placeholder="Enter plek title..."
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="baseRate">Base Rate (per night) *</Label>
-            <Input
-              id="baseRate"
-              type="number"
-              min={0}
-              value={formData.baseRate}
-              onChange={(e) => updateFormData({ baseRate: e.target.value === '' ? '' : Number(e.target.value) })}
-              placeholder="Enter base rate..."
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="baseRate">Base Rate (per night) *</Label>
+              <Input
+                id="baseRate"
+                type="number"
+                min={0}
+                value={formData.baseRate}
+                onChange={(e) => updateFormData({ baseRate: e.target.value === '' ? '' : Number(e.target.value) })}
+                placeholder="Enter base rate..."
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label>Categories</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className={cn(
-                    "w-full justify-between",
-                    formData.categories.length === 0 && "text-muted-foreground"
-                  )}
-                >
-                  <div className="flex flex-wrap gap-1 max-w-full">
-                    {formData.categories.length === 0 ? (
-                      "Select categories..."
-                    ) : formData.categories.length <= 2 ? (
-                      formData.categories.map((categoryId) => {
-                        const category = categories.find(c => c.id === categoryId)
-                        return category ? (
-                          <Badge key={categoryId} variant="secondary" className="text-xs">
-                            {category.title}
+            <div className="space-y-2">
+              <Label>Categories</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full justify-between",
+                      formData.categories.length === 0 && "text-muted-foreground"
+                    )}
+                  >
+                    <div className="flex flex-wrap gap-1 max-w-full">
+                      {formData.categories.length === 0 ? (
+                        "Select categories..."
+                      ) : formData.categories.length <= 2 ? (
+                        formData.categories.map((categoryId) => {
+                          const category = categories.find(c => c.id === categoryId)
+                          return category ? (
+                            <Badge key={categoryId} variant="secondary" className="text-xs">
+                              {category.title}
+                            </Badge>
+                          ) : null
+                        })
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-xs">
+                            {categories.find(c => c.id === formData.categories[0])?.title}
                           </Badge>
-                        ) : null
-                      })
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <Badge variant="secondary" className="text-xs">
-                          {categories.find(c => c.id === formData.categories[0])?.title}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          +{formData.categories.length - 1} more
-                        </span>
+                          <span className="text-xs text-muted-foreground">
+                            +{formData.categories.length - 1} more
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <div className="p-3 border-b">
+                    <h4 className="font-medium text-sm">Select categories</h4>
+                    <p className="text-xs text-muted-foreground">Choose one or more categories for your plek</p>
+                  </div>
+                  <div className="p-1">
+                    {categories.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground text-center">
+                        No categories available
                       </div>
+                    ) : (
+                      categories.map((category) => (
+                        <div key={category.id} className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer">
+                          <Checkbox
+                            id={`category-${category.id}`}
+                            checked={formData.categories.includes(category.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                updateFormData({ 
+                                  categories: [...formData.categories, category.id] 
+                                })
+                              } else {
+                                updateFormData({ 
+                                  categories: formData.categories.filter(id => id !== category.id) 
+                                })
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`category-${category.id}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                          >
+                            {category.title}
+                          </label>
+                          {formData.categories.includes(category.id) && (
+                            <Check className="h-4 w-4 text-primary" />
+                          )}
+                        </div>
+                      ))
                     )}
                   </div>
-                  <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0" align="start">
-                <div className="p-3 border-b">
-                  <h4 className="font-medium text-sm">Select categories</h4>
-                  <p className="text-xs text-muted-foreground">Choose one or more categories for your plek</p>
-                </div>
-                <div className="p-1">
-                  {categories.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground text-center">
-                      No categories available
-                    </div>
-                  ) : (
-                    categories.map((category) => (
-                      <div key={category.id} className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer">
-                        <Checkbox
-                          id={`category-${category.id}`}
-                          checked={formData.categories.includes(category.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              updateFormData({ 
-                                categories: [...formData.categories, category.id] 
-                              })
-                            } else {
-                              updateFormData({ 
-                                categories: formData.categories.filter(id => id !== category.id) 
-                              })
-                            }
-                          }}
-                        />
-                        <label
-                          htmlFor={`category-${category.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                  {formData.categories.length > 0 && (
+                    <div className="p-3 border-t bg-muted/50">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">
+                          {formData.categories.length} selected
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateFormData({ categories: [] })}
+                          className="h-6 text-xs"
                         >
-                          {category.title}
-                        </label>
-                        {formData.categories.includes(category.id) && (
-                          <Check className="h-4 w-4 text-primary" />
-                        )}
+                          Clear all
+                        </Button>
                       </div>
-                    ))
-                  )}
-                </div>
-                {formData.categories.length > 0 && (
-                  <div className="p-3 border-t bg-muted/50">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {formData.categories.length} selected
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => updateFormData({ categories: [] })}
-                        className="h-6 text-xs"
-                      >
-                        Clear all
-                      </Button>
                     </div>
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
-          </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
 
-          <div className="flex items-center space-x-2">
-            {/* Enhanced publish controls based on user role */}
-            {isAdmin ? (
-              // Admin: Full control over status
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="publish"
-                    checked={formData._status === 'published'}
-                    onCheckedChange={(checked) => 
-                      updateFormData({ _status: checked ? 'published' : 'draft' })
-                    }
-                  />
-                  <Label htmlFor="publish">
-                    {formData._status === 'published' ? 'Published (Live)' : 'Save as draft'}
-                  </Label>
-                </div>
-                {formData._status === 'published' && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    ✓ This post will be immediately visible to visitors
-                  </p>
-                )}
-              </div>
-            ) : (
-              // Non-admin: Request approval workflow
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="requestApproval"
-                    checked={formData._status === 'pending'}
-                    onCheckedChange={(checked) => 
-                      updateFormData({ _status: checked ? 'pending' : 'draft' })
-                    }
-                  />
-                  <Label htmlFor="requestApproval">
-                    {formData._status === 'pending' ? 'Submitted for approval' : 'Save as draft'}
-                  </Label>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {formData._status === 'pending' ? (
-                    <p className="text-amber-600 flex items-center gap-1">
-                      ⏳ Waiting for admin approval before publishing
-                    </p>
-                  ) : formData._status === 'published' ? (
-                    <p className="text-green-600 flex items-center gap-1">
-                      ✓ This post is live and approved
-                    </p>
-                  ) : (
-                    <p>
-                      Submit for approval when ready to publish. Admins will review before making it live.
+            <div className="flex items-center space-x-2">
+              {/* Enhanced publish controls based on user role */}
+              {isAdmin ? (
+                // Admin: Full control over status
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="publish"
+                      checked={formData._status === 'published'}
+                      onCheckedChange={(checked) => 
+                        updateFormData({ _status: checked ? 'published' : 'draft' })
+                      }
+                    />
+                    <Label htmlFor="publish">
+                      {formData._status === 'published' ? 'Published (Live)' : 'Save as draft'}
+                    </Label>
+                  </div>
+                  {formData._status === 'published' && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      ✓ This post will be immediately visible to visitors
                     </p>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="content">Content *</Label>
-            <Textarea
-              id="content"
-              value={formData.content}
-              onChange={(e) => updateFormData({ content: e.target.value })}
-              placeholder="Write your plek description..."
-              rows={6}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Hero Image</Label>
-            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={onImageUpload}
-                disabled={uploading}
-                className="mb-2"
-                multiple
-              />
-              {uploading && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading images...
-                </div>
-              )}
-              {uploadedImages && uploadedImages.length > 0 && uploadedImages[0] && (
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {uploadedImages.map((image) => (
-                    <div key={image.id} className="relative">
-                      <img 
-                        src={image.url} 
-                        alt={image.filename}
-                        className="w-full h-16 object-cover rounded"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-                        onClick={() => onRemoveImage(image.id)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Package Types Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium">Package Types</h3>
-          <Button type="button" onClick={onAddPackageType} variant="outline" size="sm">
-            <Plus className="h-4 w-4 mr-1" />
-            Add Package
-          </Button>
-        </div>
-        
-        {/* Package Template Quick Add */}
-        <div className="p-4 border rounded-lg bg-muted/50">
-          <p className="text-sm font-medium mb-2">Quick Add Templates:</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => (
-              <Button
-                key={key}
-                type="button"
-                variant="outline" 
-                size="sm"
-                onClick={() => onAddPackageTemplate(key)}
-                className="gap-1"
-              >
-                <Package className="h-3 w-3" />
-                {template.name}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {formData.packageTypes.map((pkg, idx) => (
-          <Card key={idx} className="p-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Package {idx + 1}</Label>
-                <Button 
-                  type="button" 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => onRemovePackageType(idx)} 
-                  disabled={formData.packageTypes.length === 1}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Input
-                  placeholder="Package name"
-                  value={pkg.name}
-                  onChange={(e) => onPackageChange(idx, 'name', e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Price"
-                      type="number"
-                      min={0}
-                      value={pkg.price}
-                      onChange={(e) => onPackageChange(idx, 'price', e.target.value === '' ? '' : Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Multiplier"
-                      type="number"
-                      min={0}
-                      step={0.1}
-                      value={pkg.multiplier}
-                      onChange={(e) => onPackageChange(idx, 'multiplier', Number(e.target.value))}
-                    />
-                  </div>
-                </div>
-                <Input
-                  placeholder="RevenueCat ID"
-                  value={pkg.revenueCatId}
-                  onChange={(e) => onPackageChange(idx, 'revenueCatId', e.target.value)}
-                />
-              </div>
-              
-              <Textarea
-                placeholder="Enter features (one per line)"
-                value={pkg.features.join('\n')}
-                onChange={(e) => onPackageChange(idx, 'features', e.target.value.split('\n').filter(f => f.trim()))}
-                rows={3}
-              />
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* SEO Meta Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-medium">SEO Meta Fields</h3>
-          <Badge variant="secondary" className="text-xs">Auto-inferred</Badge>
-        </div>
-        
-        <Alert className="border-blue-200 bg-blue-50">
-          <AlertDescription className="text-sm">
-            SEO fields are automatically generated from your title, content, and hero image. 
-            You can override them by editing the fields below.
-          </AlertDescription>
-        </Alert>
-
-        <div className="grid grid-cols-1 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="metaTitle">SEO Title</Label>
-            <Input
-              id="metaTitle"
-              value={formData.meta.title}
-              onChange={(e) => updateFormData({ meta: { ...formData.meta, title: e.target.value } })}
-              placeholder={formData.title ? `${formData.title} | Stay at our self built plek` : "Will be auto-generated from title..."}
-            />
-            {!formData.meta.title && formData.title && (
-              <p className="text-xs text-muted-foreground">
-                Auto-generated: "{formData.title} | Stay at our self built plek"
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="metaDescription">SEO Description</Label>
-            <Textarea
-              id="metaDescription"
-              value={formData.meta.description}
-              onChange={(e) => updateFormData({ meta: { ...formData.meta, description: e.target.value } })}
-              placeholder={formData.content ? formData.content.slice(0, 155) + (formData.content.length > 155 ? '...' : '') : "Will be auto-generated from content..."}
-              rows={3}
-              maxLength={160}
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>
-                {!formData.meta.description && formData.content && (
-                  <>Auto-generated from content (first 155 characters)</>
-                )}
-              </span>
-              <span>{formData.meta.description.length}/160</span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>SEO Image</Label>
-            <div className="text-sm text-muted-foreground">
-              {uploadedImages && uploadedImages.length > 0 && uploadedImages[0] ? (
-                <div className="flex items-center gap-2">
-                  <img 
-                    src={uploadedImages[0].url} 
-                    alt="SEO preview"
-                    className="w-16 h-16 object-cover rounded border"
-                  />
-                  <span>Using hero image as SEO image</span>
-                </div>
-              ) : formData.meta.image ? (
-                <span>Custom SEO image set</span>
               ) : (
-                <span>No SEO image - will use hero image when uploaded</span>
+                // Non-admin: Request approval workflow
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="requestApproval"
+                      checked={formData._status === 'pending'}
+                      onCheckedChange={(checked) => 
+                        updateFormData({ _status: checked ? 'pending' : 'draft' })
+                      }
+                    />
+                    <Label htmlFor="requestApproval">
+                      {formData._status === 'pending' ? 'Submitted for approval' : 'Save as draft'}
+                    </Label>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formData._status === 'pending' ? (
+                      <p className="text-amber-600 flex items-center gap-1">
+                        ⏳ Waiting for admin approval before publishing
+                      </p>
+                    ) : formData._status === 'published' ? (
+                      <p className="text-green-600 flex items-center gap-1">
+                        ✓ This post is live and approved
+                      </p>
+                    ) : (
+                      <p>
+                        Submit for approval when ready to publish. Admins will review before making it live.
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
-          {/* SEO Preview */}
-          <div className="p-4 border rounded-lg bg-muted/50">
-            <h4 className="text-sm font-medium mb-2">Search Engine Preview</h4>
-            <div className="space-y-1">
-              <div className="text-blue-600 text-sm font-medium">
-                {formData.meta.title || (formData.title ? `${formData.title} | Stay at our self built plek` : 'Your plek title | Stay at our self built plek')}
-              </div>
-              <div className="text-green-700 text-xs">
-                yoursite.com/posts/{formData.title ? formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'your-plek-slug'}
-              </div>
-              <div className="text-gray-600 text-sm">
-                {formData.meta.description || (formData.content ? `${formData.content.slice(0, 155)}${formData.content.length > 155 ? '...' : ''}` : 'Your plek description will appear here...')}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="content">Content *</Label>
+              <Textarea
+                id="content"
+                value={formData.content}
+                onChange={(e) => updateFormData({ content: e.target.value })}
+                placeholder="Write your plek description..."
+                rows={6}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Hero Image</Label>
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={onImageUpload}
+                  disabled={uploading}
+                  className="mb-2"
+                  multiple
+                />
+                {uploading && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading images...
+                  </div>
+                )}
+                {uploadedImages && uploadedImages.length > 0 && uploadedImages[0] && (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {uploadedImages.map((image) => (
+                      <div key={image.id} className="relative">
+                        <img 
+                          src={image.url} 
+                          alt={image.filename}
+                          className="w-full h-16 object-cover rounded"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                          onClick={() => onRemoveImage(image.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+
+        {/* Advanced Settings Section */}
+        <div className="space-y-4 mt-8">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 p-0 h-auto justify-start">
+                <Settings className="h-5 w-5" />
+                <h3 className="text-lg font-medium">Advanced Settings</h3>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full max-w-4xl p-6" align="start" side="bottom">
+              {/* SEO Meta Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-base font-medium">SEO Meta Fields</h4>
+                  <Badge variant="secondary" className="text-xs">Auto-inferred</Badge>
+                </div>
+                
+                <Alert className="border-blue-200 bg-blue-50">
+                  <AlertDescription className="text-sm">
+                    SEO fields are automatically generated from your title, content, and hero image. 
+                    You can override them by editing the fields below.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="metaTitle">SEO Title</Label>
+                    <Input
+                      id="metaTitle"
+                      value={formData.meta.title}
+                      onChange={(e) => updateFormData({ meta: { ...formData.meta, title: e.target.value } })}
+                      placeholder={formData.title ? `${formData.title} | Stay at our self built plek` : "Will be auto-generated from title..."}
+                    />
+                    {!formData.meta.title && formData.title && (
+                      <p className="text-xs text-muted-foreground">
+                        Auto-generated: "{formData.title} | Stay at our self built plek"
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="metaDescription">SEO Description</Label>
+                    <Textarea
+                      id="metaDescription"
+                      value={formData.meta.description}
+                      onChange={(e) => updateFormData({ meta: { ...formData.meta, description: e.target.value } })}
+                      placeholder={formData.content ? formData.content.slice(0, 155) + (formData.content.length > 155 ? '...' : '') : "Will be auto-generated from content..."}
+                      rows={3}
+                      maxLength={160}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>
+                        {!formData.meta.description && formData.content && (
+                          <>Auto-generated from content (first 155 characters)</>
+                        )}
+                      </span>
+                      <span>{formData.meta.description.length}/160</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>SEO Image</Label>
+                    <div className="text-sm text-muted-foreground">
+                      {uploadedImages && uploadedImages.length > 0 && uploadedImages[0] ? (
+                        <div className="flex items-center gap-2">
+                          <img 
+                            src={uploadedImages[0].url} 
+                            alt="SEO preview"
+                            className="w-16 h-16 object-cover rounded border"
+                          />
+                          <span>Using hero image as SEO image</span>
+                        </div>
+                      ) : formData.meta.image ? (
+                        <span>Custom SEO image set</span>
+                      ) : (
+                        <span>No SEO image - will use hero image when uploaded</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* SEO Preview */}
+                  <div className="p-4 border rounded-lg bg-muted/50">
+                    <h4 className="text-sm font-medium mb-2">Search Engine Preview</h4>
+                    <div className="space-y-1">
+                      <div className="text-blue-600 text-sm font-medium">
+                        {formData.meta.title || (formData.title ? `${formData.title} | Stay at our self built plek` : 'Your plek title | Stay at our self built plek')}
+                      </div>
+                      <div className="text-green-700 text-xs">
+                        yoursite.com/posts/{formData.title ? formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'your-plek-slug'}
+                      </div>
+                      <div className="text-gray-600 text-sm">
+                        {formData.meta.description || (formData.content ? (typeof formData.content === 'string' ? formData.content.slice(0, 155) + (formData.content.length > 155 ? '...' : '') : 'Content preview...') : 'Your plek description will appear here...')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="packages" className="space-y-6 mt-6">
+        {/* Package Types Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium">Package Types</h3>
+            <Button type="button" onClick={onAddPackageType} variant="outline" size="sm">
+              <Plus className="h-4 w-4 mr-1" />
+              Add Package
+            </Button>
+          </div>
+          
+          {/* Package Template Quick Add */}
+          <div className="p-4 border rounded-lg bg-muted/50">
+            <p className="text-sm font-medium mb-2">Quick Add Templates:</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => (
+                <Button
+                  key={key}
+                  type="button"
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => onAddPackageTemplate(key)}
+                  className="gap-1"
+                >
+                  <Package className="h-3 w-3" />
+                  {template.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {formData.packageTypes.map((pkg, idx) => (
+            <Card key={idx} className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Package {idx + 1}</Label>
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => onRemovePackageType(idx)} 
+                    disabled={formData.packageTypes.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Input
+                    placeholder="Package name"
+                    value={pkg.name}
+                    onChange={(e) => onPackageChange(idx, 'name', e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Price"
+                        type="number"
+                        min={0}
+                        value={pkg.price}
+                        onChange={(e) => onPackageChange(idx, 'price', e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Multiplier"
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={pkg.multiplier}
+                        onChange={(e) => onPackageChange(idx, 'multiplier', Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  <Input
+                    placeholder="RevenueCat ID"
+                    value={pkg.revenueCatId}
+                    onChange={(e) => onPackageChange(idx, 'revenueCatId', e.target.value)}
+                  />
+                </div>
+                
+                <Textarea
+                  placeholder="Enter features (one per line)"
+                  value={pkg.features.join('\n')}
+                  onChange={(e) => onPackageChange(idx, 'features', e.target.value.split('\n').filter(f => f.trim()))}
+                  rows={3}
+                />
+              </div>
+            </Card>
+          ))}
+        </div>
+      </TabsContent>
+    </Tabs>
   )
 } 

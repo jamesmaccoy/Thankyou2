@@ -373,9 +373,25 @@ export const Posts: CollectionConfig<'posts'> = {
   hooks: {
     beforeChange: [
       (args) => {
+        // Handle publishing workflow when drafts are enabled
+        const { data, operation, req } = args
+        
+        // If this is an update operation and the status is being set to published
+        if (operation === 'update' && data._status === 'published') {
+          // Ensure publishedAt is set if not already present
+          if (!data.publishedAt) {
+            data.publishedAt = new Date().toISOString()
+          }
+        }
+        
+        // For admin interface publishing, ensure we're not in draft mode when publishing
+        if (data._status === 'published' && req && 'draft' in req) {
+          req.draft = false
+        }
+        
         // Removed auto-population to prevent recursion issues
         // Package template selection can be handled in the frontend
-        return args.data
+        return data
       },
     ],
     afterChange: [revalidatePost],
