@@ -145,13 +145,31 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
   // Auto-generate SEO meta fields from form data
   const autoInferSEOMeta = useCallback((formData: PostFormData) => {
+    // Extract text content properly from the content field
+    const extractTextContent = (content: string): string => {
+      if (!content) return ''
+      
+      // Remove any HTML tags if present
+      const cleanText = content.replace(/<[^>]*>/g, '')
+      
+      // Truncate to 155 characters for description
+      return cleanText.length > 155 
+        ? `${cleanText.slice(0, 155)}...` 
+        : cleanText
+    }
+    
     const inferredMeta = {
       title: formData.title ? `${formData.title} | Stay at our self built plek` : '',
-      description: formData.content 
-        ? `${formData.content.slice(0, 155)}${formData.content.length > 155 ? '...' : ''}` 
-        : '',
+      description: extractTextContent(formData.content),
       image: uploadedImages.length > 0 && uploadedImages[0] ? uploadedImages[0].id : formData.meta.image
     }
+    
+    console.log('Auto-inferred SEO meta:', {
+      title: inferredMeta.title,
+      description: inferredMeta.description,
+      originalContent: formData.content,
+      contentLength: formData.content?.length || 0
+    })
     
     return inferredMeta
   }, [uploadedImages])
@@ -162,17 +180,24 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     const inferredMeta = autoInferSEOMeta(updatedFormData)
     
     // Only auto-update if SEO fields are empty (don't override manual changes)
-    const shouldUpdateTitle = !formData.meta.title && inferredMeta.title
-    const shouldUpdateDescription = !formData.meta.description && inferredMeta.description
-    const shouldUpdateImage = !formData.meta.image && inferredMeta.image
+    const shouldUpdateTitle = !updatedFormData.meta?.title && inferredMeta.title
+    const shouldUpdateDescription = !updatedFormData.meta?.description && inferredMeta.description
+    const shouldUpdateImage = !updatedFormData.meta?.image && inferredMeta.image
 
     if (shouldUpdateTitle || shouldUpdateDescription || shouldUpdateImage) {
       const metaUpdates = {
-        ...formData.meta,
+        ...updatedFormData.meta,
         ...(shouldUpdateTitle && { title: inferredMeta.title }),
         ...(shouldUpdateDescription && { description: inferredMeta.description }),
         ...(shouldUpdateImage && { image: inferredMeta.image })
       }
+      
+      console.log('Auto-updating SEO meta:', {
+        shouldUpdateTitle,
+        shouldUpdateDescription,
+        shouldUpdateImage,
+        metaUpdates
+      })
       
       return { ...updates, meta: metaUpdates }
     }
@@ -187,6 +212,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
   const resetForm = useCallback(() => {
     const defaultPackage = createPackageFromTemplate('per_night')
+    // Set a default price of 150 instead of empty string
+    defaultPackage.price = 150
+    
     setFormData({
       title: '',
       content: '',
@@ -229,6 +257,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   const addPackageType = useCallback(() => {
     console.log('addPackageType called, current packages:', formData.packageTypes)
     const newPackage = createPackageFromTemplate('per_night')
+    // Set a default price of 150 instead of empty string
+    newPackage.price = 150
     console.log('Adding new package:', newPackage)
     const newPackageTypes = [...formData.packageTypes, newPackage]
     console.log('New packageTypes array:', newPackageTypes)
@@ -249,6 +279,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     console.log('addPackageTemplate called:', { templateKey, currentPackages: formData.packageTypes })
     if (templateKey in packageTemplates) {
       const newPackage = createPackageFromTemplate(templateKey)
+      // Set a default price of 150 instead of empty string
+      newPackage.price = 150
       console.log('Adding template package:', newPackage)
       const newPackageTypes = [...formData.packageTypes, newPackage]
       console.log('New packageTypes with template:', newPackageTypes)
@@ -319,21 +351,25 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       console.log('Raw formData.packageTypes:', formData.packageTypes)
       
       // Filter and process packageTypes
-      const processedPackageTypes = formData.packageTypes.filter(pkg => 
+      const rawPackageTypes = formData.packageTypes.filter(pkg => 
         pkg.name && pkg.price !== ''
-      ).map(pkg => ({
+      )
+      
+      const processedPackageTypes = rawPackageTypes.map(pkg => ({
         name: pkg.name,
         description: pkg.description,
         price: Number(pkg.price),
         multiplier: pkg.multiplier,
-        // Keep features as string array - the backend will convert to objects
         features: pkg.features.filter(f => f && f.trim()),
         revenueCatId: pkg.revenueCatId,
-        category: 'standard', // Default category
-        isHosted: false, // Default value
       }))
-      
-      console.log('Processed packageTypes:', processedPackageTypes)
+
+      console.log('Package Types Processing:', {
+        originalFormDataPackageTypes: formData.packageTypes,
+        filteredRawPackageTypes: rawPackageTypes,
+        processedPackageTypes: processedPackageTypes,
+        packageTypesLength: processedPackageTypes.length
+      })
 
       // Create both post and estimate
       const postData: any = {
@@ -431,38 +467,9 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
       const result = await response.json()
 
-      // Create associated estimate with package types
-      if (formData.packageTypes.length > 0) {
-        try {
-          const validPackageTypes = formData.packageTypes.filter(pkg => 
-            pkg.name && pkg.price !== ''
-          ).map(pkg => ({
-            ...pkg,
-            price: Number(pkg.price)
-          }))
-
-          if (validPackageTypes.length > 0) {
-            const estimateData = {
-              customer: user.id,
-              post: result.doc.id,
-              baseRate: Number(formData.baseRate) || 0,
-              packageTypes: validPackageTypes,
-              title: `${formData.title} - Package Options`
-            }
-
-            await fetch('/api/estimates', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(estimateData),
-            })
-          }
-        } catch (estimateError) {
-          console.warn('Failed to create estimate, but post was created successfully:', estimateError)
-        }
-      }
-
+      // Remove automatic estimate creation - estimates should be user-initiated
+      // Previously this would auto-create estimates for posts with package types
+      
       setPosts(prev => [result.doc, ...prev])
       setSuccess('Plek created successfully!')
       setIsCreateDialogOpen(false)
@@ -553,6 +560,27 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         return !isNaN(numValue) && numValue >= 0 ? numValue : undefined
       }
 
+      // Add packageTypes to the post data
+      const rawPackageTypes = formData.packageTypes.filter(pkg => 
+        pkg.name && pkg.price !== ''
+      )
+      
+      const processedPackageTypes = rawPackageTypes.map(pkg => ({
+        name: pkg.name,
+        description: pkg.description,
+        price: Number(pkg.price),
+        multiplier: pkg.multiplier,
+        features: pkg.features.filter(f => f && f.trim()),
+        revenueCatId: pkg.revenueCatId,
+      }))
+
+      console.log('Package Types Processing:', {
+        originalFormDataPackageTypes: formData.packageTypes,
+        filteredRawPackageTypes: rawPackageTypes,
+        processedPackageTypes: processedPackageTypes,
+        packageTypesLength: processedPackageTypes.length
+      })
+
       const postData: any = {
         title: cleanTitle,
         content: [
@@ -576,17 +604,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         },
         categories: formData.categories.filter(cat => cat && typeof cat === 'string'),
         _status: formData._status,
-        // Add packageTypes to the post data
-        packageTypes: formData.packageTypes.filter(pkg => 
-          pkg.name && pkg.price !== ''
-        ).map(pkg => ({
-          name: pkg.name,
-          description: pkg.description,
-          price: Number(pkg.price),
-          multiplier: pkg.multiplier,
-          features: pkg.features.filter(f => f && f.trim()),
-          revenueCatId: pkg.revenueCatId,
-        }))
+        packageTypes: processedPackageTypes
       }
 
       // Only add baseRate if it's a valid number
