@@ -251,7 +251,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       id,
       data: cleanData,
       user,
-      draft: cleanData._status !== 'published', // Set draft to false when publishing
     })
 
     return NextResponse.json({ 

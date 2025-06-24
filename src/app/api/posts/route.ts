@@ -340,7 +340,6 @@ export async function POST(req: NextRequest) {
       collection: 'posts',
       data: cleanData,
       user,
-      draft: cleanData._status !== 'published', // Set draft to false when publishing
     })
 
     return NextResponse.json({ 
