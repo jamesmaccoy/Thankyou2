@@ -136,21 +136,6 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     }
   }))
 
-  // Initialize default package type when component mounts
-  useEffect(() => {
-    if (formData.packageTypes.length === 0) {
-      try {
-        const defaultPackage = createPackageFromTemplate('per_night')
-        setFormData(prev => ({
-          ...prev,
-          packageTypes: [defaultPackage]
-        }))
-      } catch (error) {
-        console.warn('Failed to create default package template:', error)
-      }
-    }
-  }, [createPackageFromTemplate, formData.packageTypes.length])
-
   // Image upload
   const [uploadedImages, setUploadedImages] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
@@ -201,12 +186,13 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   }, [])
 
   const resetForm = useCallback(() => {
+    const defaultPackage = createPackageFromTemplate('per_night')
     setFormData({
       title: '',
       content: '',
       categories: [],
       _status: 'draft',
-      packageTypes: [],
+      packageTypes: [defaultPackage],
       baseRate: '',
       meta: {
         title: '',
@@ -215,7 +201,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       }
     })
     setUploadedImages([])
-  }, [])
+  }, [createPackageFromTemplate])
 
   // Debounced form update function to improve performance
   const updateFormData = useCallback((updates: Partial<PostFormData>) => {
@@ -340,8 +326,11 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         description: pkg.description,
         price: Number(pkg.price),
         multiplier: pkg.multiplier,
+        // Keep features as string array - the backend will convert to objects
         features: pkg.features.filter(f => f && f.trim()),
         revenueCatId: pkg.revenueCatId,
+        category: 'standard', // Default category
+        isHosted: false, // Default value
       }))
       
       console.log('Processed packageTypes:', processedPackageTypes)
@@ -833,18 +822,33 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
           <p className="text-muted-foreground">Manage your posts and content</p>
         </div>
         <div className="flex gap-3">
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => setIsViewerDialogOpen(true)}
-          >
-            <Code className="h-4 w-4" />
-            Browse Pleks Embed
-          </Button>
-          <Button onClick={openCreateDialog} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create New Plek
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Actions
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0" align="end">
+              <div className="p-1">
+                <div 
+                  className="flex items-center gap-2 p-2 hover:bg-accent rounded-sm cursor-pointer transition-colors"
+                  onClick={openCreateDialog}
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="text-sm">Create New Plek</span>
+                </div>
+                <div 
+                  className="flex items-center gap-2 p-2 hover:bg-accent rounded-sm cursor-pointer transition-colors"
+                  onClick={() => setIsViewerDialogOpen(true)}
+                >
+                  <Code className="h-4 w-4" />
+                  <span className="text-sm">Browse Pleks Embed</span>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -1674,21 +1678,11 @@ function PostForm({
               </div>
               
               <Textarea
-                placeholder="Package description"
-                value={pkg.description}
-                onChange={(e) => onPackageChange(idx, 'description', e.target.value)}
-                rows={2}
+                placeholder="Enter features (one per line)"
+                value={pkg.features.join('\n')}
+                onChange={(e) => onPackageChange(idx, 'features', e.target.value.split('\n').filter(f => f.trim()))}
+                rows={3}
               />
-              
-              <div className="space-y-2">
-                <Label className="text-sm">Features</Label>
-                <Textarea
-                  placeholder="Enter features (one per line)"
-                  value={pkg.features.join('\n')}
-                  onChange={(e) => onPackageChange(idx, 'features', e.target.value.split('\n').filter(f => f.trim()))}
-                  rows={3}
-                />
-              </div>
             </div>
           </Card>
         ))}

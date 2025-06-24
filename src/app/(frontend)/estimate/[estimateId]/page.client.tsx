@@ -124,7 +124,31 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     console.log('Post data:', _post)
     console.log('Post packageTypes:', _post?.packageTypes)
     
-    // Always try centralized packages first, but integrate with post data
+    // FIRST PRIORITY: Use post-specific packageTypes if they exist
+    if (_post?.packageTypes && Array.isArray(_post.packageTypes) && _post.packageTypes.length > 0) {
+      const postPackages: Record<string, EnhancedPackageDetails> = {}
+      _post.packageTypes.forEach((pkg: any) => {
+        const packageKey = pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_')
+        postPackages[packageKey] = {
+          id: packageKey,
+          title: pkg.name,
+          description: pkg.description || '',
+          multiplier: pkg.multiplier || 1,
+          features: Array.isArray(pkg.features) 
+            ? pkg.features.map((f: any) => typeof f === 'string' ? f : f.feature || '').filter((f: string) => f.trim())
+            : [],
+          revenueCatId: pkg.revenueCatId || packageKey,
+          price: pkg.price || (_post?.baseRate || 150),
+          minNights: pkg.minNights || 1,
+          maxNights: pkg.maxNights || 365,
+          availableSeasons: ['all'], // Default to all seasons
+        }
+      })
+      console.log('Using post-specific packages:', postPackages)
+      return postPackages
+    }
+    
+    // SECOND PRIORITY: Fallback to centralized packages if no post-specific packages
     const centralizedPackages = getAllPackageTypes()
     if (centralizedPackages && Object.keys(centralizedPackages).length > 0) {
       const packageDetails: Record<string, EnhancedPackageDetails> = {}
@@ -145,35 +169,11 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           availableSeasons: ['all'], // Default to all seasons for now
         }
       })
-      console.log('Using centralized packages with post integration:', packageDetails)
+      console.log('Using centralized packages (no post-specific packages found):', packageDetails)
       return packageDetails
     }
     
-    // Fallback to post packageTypes if centralized system is not available
-    if (_post?.packageTypes && Array.isArray(_post.packageTypes) && _post.packageTypes.length > 0) {
-      const postPackages: Record<string, EnhancedPackageDetails> = {}
-      _post.packageTypes.forEach((pkg: any) => {
-        const packageKey = pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_')
-        postPackages[packageKey] = {
-          id: packageKey,
-          title: pkg.name,
-          description: pkg.description || '',
-          multiplier: pkg.multiplier || 1,
-          features: Array.isArray(pkg.features) 
-            ? pkg.features.map((f: any) => typeof f === 'string' ? f : f.feature || '').filter((f: string) => f.trim())
-            : [],
-          revenueCatId: pkg.revenueCatId || packageKey,
-          price: pkg.price || (_post?.baseRate || 150),
-          minNights: pkg.minNights || 1,
-          maxNights: pkg.maxNights || 365,
-          availableSeasons: ['all'], // Default to all seasons
-        }
-      })
-      console.log('Using post packages:', postPackages)
-      return postPackages
-    }
-    
-    // Final fallback to default packages
+    // FINAL FALLBACK: Default packages if nothing else is available
     const defaultPackages: Record<string, EnhancedPackageDetails> = {
       per_night: {
         id: "per_night",
@@ -192,7 +192,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         availableSeasons: ['all'],
       }
     }
-    console.log('Using default packages:', defaultPackages)
+    console.log('Using default packages (no packages found anywhere):', defaultPackages)
     return defaultPackages
   }
 

@@ -264,23 +264,47 @@ export async function POST(req: NextRequest) {
 
     // Handle packageTypes safely
     if (body.packageTypes !== undefined && Array.isArray(body.packageTypes)) {
-      console.log('Raw body.packageTypes received:', body.packageTypes)
+      console.log('=== PACKAGE TYPES PROCESSING ===')
+      console.log('Raw body.packageTypes received:', JSON.stringify(body.packageTypes, null, 2))
       
       cleanData.packageTypes = body.packageTypes
-        .filter((pkg: any) => pkg && typeof pkg === 'object' && pkg.name && pkg.price !== undefined)
-        .map((pkg: any) => ({
-          name: String(pkg.name || '').trim(),
-          description: String(pkg.description || '').trim(),
-          price: Number(pkg.price) || 0,
-          multiplier: Number(pkg.multiplier) || 1,
-          features: Array.isArray(pkg.features) 
-            ? pkg.features.filter((f: any) => f && typeof f === 'string').map((f: string) => ({ feature: f.trim() }))
-            : [],
-          revenueCatId: String(pkg.revenueCatId || '').trim(),
-        }))
-        .filter((pkg: any) => pkg.name && pkg.price >= 0)
+        .filter((pkg: any) => {
+          const isValid = pkg && typeof pkg === 'object' && pkg.name && pkg.price !== undefined
+          console.log(`Package "${pkg?.name}" validation:`, isValid)
+          return isValid
+        })
+        .map((pkg: any) => {
+          const processedPkg = {
+            name: String(pkg.name || '').trim(),
+            description: String(pkg.description || '').trim(),
+            price: Number(pkg.price) || 0,
+            multiplier: Number(pkg.multiplier) || 1,
+            features: Array.isArray(pkg.features) 
+              ? pkg.features.map((f: any) => {
+                  // Handle both string format and object format
+                  if (typeof f === 'string') {
+                    return { feature: f.trim() }
+                  } else if (f && typeof f === 'object' && f.feature) {
+                    return { feature: String(f.feature).trim() }
+                  }
+                  return null
+                }).filter(Boolean)
+              : [],
+            revenueCatId: String(pkg.revenueCatId || '').trim(),
+            category: pkg.category || 'standard',
+            isHosted: Boolean(pkg.isHosted),
+          }
+          console.log(`Processed package "${pkg.name}":`, JSON.stringify(processedPkg, null, 2))
+          return processedPkg
+        })
+        .filter((pkg: any) => {
+          const isValidFinal = pkg.name && pkg.price >= 0
+          console.log(`Final validation for "${pkg.name}":`, isValidFinal)
+          return isValidFinal
+        })
         
-      console.log('Processed cleanData.packageTypes:', cleanData.packageTypes)
+      console.log('Final cleanData.packageTypes:', JSON.stringify(cleanData.packageTypes, null, 2))
+      console.log('=== END PACKAGE TYPES PROCESSING ===')
     } else {
       console.log('No packageTypes in body or not an array:', typeof body.packageTypes, body.packageTypes)
     }

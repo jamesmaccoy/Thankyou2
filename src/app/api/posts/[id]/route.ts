@@ -313,4 +313,32 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       { status: 500 }
     )
   }
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const payload = await getPayload({ config: configPromise })
+    
+    const post = await payload.findByID({
+      collection: 'posts',
+      id,
+      depth: 2, // Include related data
+    })
+
+    if (!post) {
+      return NextResponse.json(
+        { error: 'Post not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ doc: post })
+  } catch (error: any) {
+    console.error('Error fetching post:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to fetch post' },
+      { status: 500 }
+    )
+  }
 } 
