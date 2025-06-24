@@ -294,8 +294,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
   const resetForm = useCallback(() => {
     const defaultPackage = createPackageFromTemplate('per_night')
-    // Set a default price of 150 instead of empty string
-    defaultPackage.price = 150
+    // Use empty string as default - let the system use baseRate from post
+    defaultPackage.price = ''
     
     setFormData({
       title: '',
@@ -339,8 +339,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   const addPackageType = useCallback(() => {
     console.log('addPackageType called, current packages:', formData.packageTypes)
     const newPackage = createPackageFromTemplate('per_night')
-    // Set a default price of 150 instead of empty string
-    newPackage.price = 150
+    // Use empty string as default - let the system use baseRate from post
+    newPackage.price = ''
     console.log('Adding new package:', newPackage)
     const newPackageTypes = [...formData.packageTypes, newPackage]
     console.log('New packageTypes array:', newPackageTypes)
@@ -361,8 +361,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
     console.log('addPackageTemplate called:', { templateKey, currentPackages: formData.packageTypes })
     if (templateKey in packageTemplates) {
       const newPackage = createPackageFromTemplate(templateKey)
-      // Set a default price of 150 instead of empty string
-      newPackage.price = 150
+      // Use empty string as default - let the system use baseRate from post
+      newPackage.price = ''
       console.log('Adding template package:', newPackage)
       const newPackageTypes = [...formData.packageTypes, newPackage]
       console.log('New packageTypes with template:', newPackageTypes)
@@ -2036,12 +2036,19 @@ function PostForm({
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <Input
-                        placeholder="Price"
+                        placeholder={`Price (leave empty to use base rate: ${formData.baseRate || 'not set'})`}
                         type="number"
                         min={0}
                         value={pkg.price}
                         onChange={(e) => onPackageChange(idx, 'price', e.target.value === '' ? '' : Number(e.target.value))}
+                        title="Leave empty to automatically use the post's base rate, or enter a custom price for this package"
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {pkg.price === '' ? 
+                          `Will use base rate (${formData.baseRate || 'set base rate first'})` : 
+                          'Using custom price'
+                        }
+                      </p>
                     </div>
                     <div className="flex-1">
                       <Input
@@ -2051,6 +2058,7 @@ function PostForm({
                         step={0.1}
                         value={pkg.multiplier}
                         onChange={(e) => onPackageChange(idx, 'multiplier', Number(e.target.value))}
+                        title="Price multiplier applied to the base/custom price"
                       />
                     </div>
                   </div>

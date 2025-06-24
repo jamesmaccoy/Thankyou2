@@ -266,18 +266,24 @@ export async function POST(req: NextRequest) {
     if (body.packageTypes !== undefined && Array.isArray(body.packageTypes)) {
       console.log('=== PACKAGE TYPES PROCESSING ===')
       console.log('Raw body.packageTypes received:', JSON.stringify(body.packageTypes, null, 2))
+      console.log('Post baseRate:', cleanData.baseRate)
       
       cleanData.packageTypes = body.packageTypes
         .filter((pkg: any) => {
-          const isValid = pkg && typeof pkg === 'object' && pkg.name && pkg.price !== undefined
+          const isValid = pkg && typeof pkg === 'object' && pkg.name
           console.log(`Package "${pkg?.name}" validation:`, isValid)
           return isValid
         })
         .map((pkg: any) => {
+          // Use post's baseRate if package price is empty/undefined
+          const packagePrice = (pkg.price !== undefined && pkg.price !== null && pkg.price !== '') 
+            ? Number(pkg.price) 
+            : (cleanData.baseRate || 150) // Fallback to baseRate or 150 if no baseRate
+          
           const processedPkg = {
             name: String(pkg.name || '').trim(),
             description: String(pkg.description || '').trim(),
-            price: Number(pkg.price) || 0,
+            price: packagePrice,
             multiplier: Number(pkg.multiplier) || 1,
             features: Array.isArray(pkg.features) 
               ? pkg.features.map((f: any) => {

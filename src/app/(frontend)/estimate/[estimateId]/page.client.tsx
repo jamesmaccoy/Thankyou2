@@ -61,8 +61,41 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     ? Math.max(1, Math.round((new Date(data.toDate).getTime() - new Date(data.fromDate).getTime()) / (1000 * 60 * 60 * 24)))
     : 1;
   const _bookingTotal = data?.total ?? 0;
-  const _postId = typeof data?.post === 'object' && data?.post?.id ? data.post.id : ''
+  const _postId = typeof data?.post === 'object' && data?.post?.id ? data.post.id : (typeof data?.post === 'string' ? data.post : '')
   const _post = typeof data?.post === 'object' ? data.post : null
+
+  // State for post data if we need to fetch it
+  const [postData, setPostData] = useState<any>(null)
+  const [loadingPost, setLoadingPost] = useState(false)
+
+  // Fetch post data if it's not populated in the estimate
+  useEffect(() => {
+    const fetchPostData = async () => {
+      if (!_post && _postId) {
+        setLoadingPost(true)
+        try {
+          const response = await fetch(`/api/posts/${_postId}`)
+          if (response.ok) {
+            const result = await response.json()
+            const post = result.doc // API returns { doc: post }
+            setPostData(post)
+            console.log('Fetched post data:', post)
+          } else {
+            console.error('Failed to fetch post data:', response.status)
+          }
+        } catch (error) {
+          console.error('Error fetching post data:', error)
+        } finally {
+          setLoadingPost(false)
+        }
+      }
+    }
+
+    fetchPostData()
+  }, [_post, _postId])
+
+  // Use either the populated post or the fetched post data
+  const effectivePost = _post || postData
 
   const [guests, setGuests] = useState<User[]>(Array.isArray(data.guests) ? data.guests.filter(g => typeof g !== 'string') as User[] : [])
   const [loading, setLoading] = useState(false)
@@ -121,14 +154,23 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
 
   // Get packages from the centralized system with proper post integration
   const getPackageDetails = (): Record<string, EnhancedPackageDetails> => {
-    console.log('Post data:', _post)
-    console.log('Post packageTypes:', _post?.packageTypes)
+    console.log('=== PACKAGE DETAILS DEBUG ===')
+    console.log('effectivePost:', effectivePost)
+    console.log('effectivePost?.baseRate:', effectivePost?.baseRate)
+    console.log('effectivePost?.packageTypes:', effectivePost?.packageTypes)
+    
+    // Get the post's base rate as fallback
+    const postBaseRate = effectivePost?.baseRate || 150
+    console.log('Using postBaseRate:', postBaseRate)
     
     // FIRST PRIORITY: Use post-specific packageTypes if they exist
-    if (_post?.packageTypes && Array.isArray(_post.packageTypes) && _post.packageTypes.length > 0) {
+    if (effectivePost?.packageTypes && Array.isArray(effectivePost.packageTypes) && effectivePost.packageTypes.length > 0) {
       const postPackages: Record<string, EnhancedPackageDetails> = {}
-      _post.packageTypes.forEach((pkg: any) => {
+      effectivePost.packageTypes.forEach((pkg: any) => {
         const packageKey = pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_')
+        const packagePrice = pkg.price || postBaseRate
+        console.log(`Package "${pkg.name}": price=${pkg.price}, using=${packagePrice}, baseRate=${postBaseRate}`)
+        
         postPackages[packageKey] = {
           id: packageKey,
           title: pkg.name,
@@ -138,13 +180,14 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
             ? pkg.features.map((f: any) => typeof f === 'string' ? f : f.feature || '').filter((f: string) => f.trim())
             : [],
           revenueCatId: pkg.revenueCatId || packageKey,
-          price: pkg.price || (_post?.baseRate || 150),
+          price: packagePrice, // Use package price if available, otherwise post baseRate
           minNights: pkg.minNights || 1,
           maxNights: pkg.maxNights || 365,
           availableSeasons: ['all'], // Default to all seasons
         }
       })
-      console.log('Using post-specific packages:', postPackages)
+      console.log('Final post-specific packages:', postPackages)
+      console.log('=== END PACKAGE DEBUG ===')
       return postPackages
     }
     
@@ -153,9 +196,6 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     if (centralizedPackages && Object.keys(centralizedPackages).length > 0) {
       const packageDetails: Record<string, EnhancedPackageDetails> = {}
       Object.entries(centralizedPackages).forEach(([key, pkg]) => {
-        // Use post's base rate as the pricing basis
-        const basePrice = _post?.baseRate || 150
-        
         packageDetails[key] = {
           id: key,
           title: pkg.name,
@@ -163,13 +203,14 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           multiplier: pkg.multiplier,
           features: pkg.features,
           revenueCatId: pkg.revenueCatId,
-          price: basePrice, // Use the post's base rate
+          price: postBaseRate, // Use the post's base rate for centralized packages
           minNights: pkg.minNights || 1,
           maxNights: pkg.maxNights || 365,
           availableSeasons: ['all'], // Default to all seasons for now
         }
       })
-      console.log('Using centralized packages (no post-specific packages found):', packageDetails)
+      console.log('Using centralized packages with baseRate fallback:', packageDetails)
+      console.log('=== END PACKAGE DEBUG ===')
       return packageDetails
     }
     
@@ -186,13 +227,14 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           "Self-service"
         ],
         revenueCatId: "per_night",
-        price: _post?.baseRate || 150,
+        price: postBaseRate,
         minNights: 1,
         maxNights: 365,
         availableSeasons: ['all'],
       }
     }
-    console.log('Using default packages (no packages found anywhere):', defaultPackages)
+    console.log('Using default packages with baseRate fallback:', defaultPackages)
+    console.log('=== END PACKAGE DEBUG ===')
     return defaultPackages
   }
 
@@ -278,9 +320,15 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     setSelectedPackage(packageId)
     const selectedPkg = packageDetails[packageId]
     if (selectedPkg) {
-      const basePrice = selectedPkg.price || (_post?.baseRate || 150)
-      const calculatedPrice = basePrice * selectedPkg.multiplier * selectedDuration
+      // Use the package's price (which is either the package's custom price or post's baseRate)
+      const calculatedPrice = selectedPkg.price * selectedPkg.multiplier * selectedDuration
       setPackagePrice(calculatedPrice)
+      console.log('Package selection pricing:', { 
+        packagePrice: selectedPkg.price, 
+        multiplier: selectedPkg.multiplier, 
+        duration: selectedDuration, 
+        total: calculatedPrice 
+      })
     }
   }
 
@@ -316,20 +364,38 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
       }
     }
 
-    // Fallback to local pricing calculation
-    const basePrice = selectedPackageDetails.price || (_post?.baseRate || 150)
+    // Fallback to local pricing calculation using package price
+    const packagePrice = selectedPackageDetails.price
     const multiplier = selectedPackageDetails.multiplier ?? 1.0
-    const calculatedPrice = basePrice * multiplier * selectedDuration
+    const calculatedPrice = packagePrice * multiplier * selectedDuration
     setPackagePrice(calculatedPrice)
-    console.log('Using fallback pricing:', { basePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
-  }, [selectedPackage, offerings, selectedDuration, packageDetails, _post?.baseRate])
+    console.log('Using package pricing:', { packagePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
+  }, [selectedPackage, offerings, selectedDuration, packageDetails, effectivePost?.baseRate])
 
   const calculateTotalPrice = () => {
-    const totalPrice = packagePrice || 0
+    // Calculate package price directly from selected package details
+    let packageTotal = 0
+    if (selectedPackage && packageDetails[selectedPackage]) {
+      const selectedPkg = packageDetails[selectedPackage]
+      packageTotal = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+    }
+    
+    // Calculate wine package price if selected
     const winePrice = isWineSelected && packageDetails.wine_package 
       ? (packageDetails.wine_package.price * packageDetails.wine_package.multiplier * selectedDuration)
       : 0
-    return totalPrice + winePrice
+      
+    const total = packageTotal + winePrice
+    console.log('calculateTotalPrice:', { 
+      selectedPackage, 
+      packageTotal, 
+      winePrice, 
+      total,
+      selectedDuration,
+      packageDetails: selectedPackage ? packageDetails[selectedPackage] : null
+    })
+    
+    return total
   }
 
   const formatPrice = (price: number | null) => {
@@ -427,7 +493,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           fromDate: data.fromDate,
           toDate: data.toDate,
           guests: Array.isArray(data.guests) ? data.guests.map(g => typeof g === 'string' ? g : g.id) : [],
-          baseRate: finalTotal,
+          baseRate: effectivePost?.baseRate || 150, // Send the post's base rate for backend calculations
           duration: selectedDuration,
           customer: user.id,
           packageType: selectedPackage,
@@ -488,7 +554,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
       })
   }
 
-  if (loading || loadingOfferings) {
+  if (loading || loadingOfferings || loadingPost) {
     return (
       <div className="container py-10">
         <h1 className="text-4xl font-bold tracking-tighter mb-8">Start your curated stay</h1>
@@ -545,16 +611,16 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-3">
-                    {!!data?.post.meta?.image && (
+                    {!!effectivePost?.meta?.image && (
                       <div className="w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border border-border bg-white">
                         <Media
-                          resource={data?.post.meta?.image || undefined}
+                          resource={effectivePost?.meta?.image || undefined}
                           className="w-full h-full object-cover"
                         />
                       </div>
                     )}
                     <div className="flex flex-col gap-1">
-                      <h1 className="text-2xl font-bold">{data?.post.title}</h1>
+                      <h1 className="text-2xl font-bold">{effectivePost?.title}</h1>
                       <span className="font-medium">Date Estimated: {formatDateTime(data?.createdAt)}</span>
                       <span className="font-medium">Guests: {Array.isArray(data?.guests) ? data.guests.length : 0}</span>
                     </div>
@@ -612,6 +678,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 const pkg = packageInfo as EnhancedPackageDetails
                 
                 const isSelected = selectedPackage === packageId
+                // Use the package's price field (which contains either package price or post baseRate)
                 const calculatedPrice = pkg.price * pkg.multiplier
                 const totalPrice = calculatedPrice * selectedDuration
                 

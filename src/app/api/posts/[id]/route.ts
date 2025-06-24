@@ -179,8 +179,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Handle packageTypes safely
     if (body.packageTypes !== undefined && Array.isArray(body.packageTypes)) {
       cleanData.packageTypes = body.packageTypes
-        .filter((pkg: any) => pkg && typeof pkg === 'object' && pkg.name && pkg.price !== undefined)
+        .filter((pkg: any) => pkg && typeof pkg === 'object' && pkg.name)
         .map((pkg: any) => {
+          // Use post's baseRate if package price is empty/undefined
+          const packagePrice = (pkg.price !== undefined && pkg.price !== null && pkg.price !== '') 
+            ? Number(pkg.price) 
+            : (cleanData.baseRate || 150) // Fallback to baseRate or 150 if no baseRate
+          
           // Handle features array safely to prevent circular references
           let features = []
           if (Array.isArray(pkg.features)) {
@@ -200,7 +205,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           return {
             name: String(pkg.name || '').trim(),
             description: String(pkg.description || '').trim(),
-            price: Number(pkg.price) || 0,
+            price: packagePrice,
             multiplier: Number(pkg.multiplier) || 1,
             features: features,
             revenueCatId: String(pkg.revenueCatId || '').trim(),
