@@ -145,17 +145,45 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
 
   // Auto-generate SEO meta fields from form data
   const autoInferSEOMeta = useCallback((formData: PostFormData) => {
-    // Extract text content properly from the content field
-    const extractTextContent = (content: string): string => {
+    // Extract text content properly from Lexical content structure
+    const extractTextContent = (content: any): string => {
       if (!content) return ''
       
-      // Remove any HTML tags if present
-      const cleanText = content.replace(/<[^>]*>/g, '')
+      // Handle Lexical content structure
+      if (typeof content === 'object' && content.root) {
+        const extractFromNode = (node: any): string => {
+          if (!node) return ''
+          
+          // If it's a text node, return the text
+          if (node.type === 'text' && node.text) {
+            return node.text
+          }
+          
+          // If it has children, recursively extract text from them
+          if (Array.isArray(node.children)) {
+            return node.children.map(extractFromNode).join(' ')
+          }
+          
+          return ''
+        }
+        
+        const text = extractFromNode(content.root)
+        
+        // Truncate to 155 characters for description
+        return text.length > 155 
+          ? `${text.slice(0, 155)}...` 
+          : text
+      }
       
-      // Truncate to 155 characters for description
-      return cleanText.length > 155 
-        ? `${cleanText.slice(0, 155)}...` 
-        : cleanText
+      // Fallback: if it's a string, remove HTML tags and return
+      if (typeof content === 'string') {
+        const cleanText = content.replace(/<[^>]*>/g, '')
+        return cleanText.length > 155 
+          ? `${cleanText.slice(0, 155)}...` 
+          : cleanText
+      }
+      
+      return ''
     }
     
     const inferredMeta = {
@@ -168,7 +196,8 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       title: inferredMeta.title,
       description: inferredMeta.description,
       originalContent: formData.content,
-      contentLength: formData.content?.length || 0
+      contentType: typeof formData.content,
+      contentStructure: formData.content && typeof formData.content === 'object' ? 'Lexical JSON' : 'String'
     })
     
     return inferredMeta
@@ -779,7 +808,7 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   }
 
   const getPostStatusBadge = (post: Post) => {
-    const status = post._status
+    const status = post._status as 'draft' | 'published' | 'pending' | null
     const isPublished = status === 'published' && post.publishedAt
     
     if (isPublished) {
