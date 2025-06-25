@@ -48,12 +48,35 @@ export default async function PlekAdminPage() {
     sort: 'title',
   })
 
+  // Fetch bookings for statistics
+  const bookings = await payload.find({
+    collection: 'bookings',
+    where: {
+      or: [
+        {
+          customer: {
+            equals: user.id,
+          },
+        },
+        {
+          guests: {
+            contains: user.id,
+          },
+        },
+      ],
+    },
+    depth: 2,
+    limit: 1000,
+    sort: '-createdAt',
+  })
+
   return (
     <div className="min-h-screen bg-background">
       <PlekAdminClient 
         user={user}
         initialPosts={userPosts.docs}
         categories={categories.docs}
+        initialBookings={bookings.docs}
       />
       <Link
         href="/host"
