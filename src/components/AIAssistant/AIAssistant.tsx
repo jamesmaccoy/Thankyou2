@@ -227,7 +227,14 @@ export const AIAssistant = () => {
       const data = await response.json()
       const assistantMessage: Message = { role: 'assistant', content: data.message }
       setMessages((prev) => [...prev, assistantMessage])
-      speak(data.message)
+      // Remove all anchor tags and their contents
+      let plainText = data.message.replace(/<a [^>]*>.*?<\/a>/gi, '')
+      // Remove any remaining HTML tags and decode HTML entities
+      plainText = plainText
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+      speak(plainText.trim())
     } catch (error) {
       console.error('Error:', error)
       const errorMessage = 'Sorry, I encountered an error. Please try again.'
