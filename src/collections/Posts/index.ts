@@ -32,10 +32,14 @@ import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: hostOrCustomer,
+    create: ({ req: { user } }) => {
+      if (!user) return false
+      const roles = user.role || []
+      return roles.includes('customer') || roles.includes('host') || roles.includes('admin')
+    },
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('host')) return true
+      if (user.role?.includes('admin') || user.role?.includes('host')) return true
       if (user.role?.includes('customer')) {
         return {
           authors: {
@@ -48,7 +52,7 @@ export const Posts: CollectionConfig<'posts'> = {
     read: authenticatedOrPublished,
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('host')) return true
+      if (user.role?.includes('admin') || user.role?.includes('host')) return true
       if (user.role?.includes('customer')) {
         return {
           authors: {
@@ -75,7 +79,7 @@ export const Posts: CollectionConfig<'posts'> = {
     hidden: ({ user }) => {
       if (!user) return true
       const roles = user.role || []
-      return !roles.includes('host') && !roles.includes('customer')
+      return !roles.includes('admin') && !roles.includes('host') && !roles.includes('customer')
     },
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {

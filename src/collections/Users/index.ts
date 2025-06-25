@@ -1,79 +1,42 @@
 import type { CollectionConfig } from 'payload'
 
-import { authenticated } from '../../access/authenticated'
+import { isAdmin } from '@/access/isAdmin'
 
-export const Users: CollectionConfig = {
+const Users: CollectionConfig = {
   slug: 'users',
+  admin: {
+    useAsTitle: 'name',
+    defaultColumns: ['name', 'email'],
+  },
   access: {
-    admin: authenticated,
-    create: () => true,
-    delete: ({ req: { user } }) => {
-      if (!user) return false
-      return user.role?.includes('host') || false
-    },
-    read: async ({ req: { user, payload } }) => {
-      if (!user) return false
+    read: ({ req: { user } }) => {
+      // Admins can see all users
+      if (user?.role?.includes('admin')) {
+        return true
+      }
       
-      // Hosts can see all users
-      if (user.role?.includes('host')) return true
-      
-      // Customers can see all users (existing behavior)
-      if (user.role?.includes('customer')) return true
-      
-      // Guests can only see users associated with their bookings
-      if (user.role?.includes('guest')) {
-        // Get bookings where this user is listed as a guest
-        const bookings = await payload.find({
-          collection: 'bookings',
-          where: {
-            guests: {
-              contains: user.id,
-            },
-          },
-          depth: 0,
-        })
-
-        // Extract all customer IDs and guest IDs from bookings
-        const allowedUserIds = new Set([user.id]) // Include the user themselves
-        
-        bookings.docs.forEach((booking) => {
-          if (booking.customer) {
-            if (typeof booking.customer === 'string') {
-              allowedUserIds.add(booking.customer)
-            } else if (booking.customer.id) {
-              allowedUserIds.add(booking.customer.id)
-            }
-          }
-
-          if (booking.guests) {
-            booking.guests.forEach((guest) => {
-              if (typeof guest === 'string') {
-                allowedUserIds.add(guest)
-              } else if (guest && guest.id) {
-                allowedUserIds.add(guest.id)
-              }
-            })
-          }
-        })
-
+      // Other users can only see their own record
+      if (user) {
         return {
           id: {
-            in: Array.from(allowedUserIds),
+            equals: user.id,
           },
         }
       }
-
+      
+      // Non-authenticated users can't see any users
       return false
     },
+    create: () => true,
     update: ({ req: { user }, id }) => {
       if (!user) return false
-      if (user.role?.includes('host')) return true
+      if (user?.role?.includes('admin')) return true
       return user.id === id
     },
-  },
-  admin: {
-    defaultColumns: ['name', 'email'],
-    useAsTitle: 'name',
+    delete: isAdmin,
+    admin: ({ req: { user } }) => {
+      return user?.role?.includes('admin') || false
+    },
   },
   auth: true,
   fields: [
@@ -83,26 +46,38 @@ export const Users: CollectionConfig = {
     },
     {
       name: 'role',
-      label: 'Roles',
       type: 'select',
+      defaultValue: 'guest',
       hasMany: true,
       options: [
         {
-          label: 'Host',
-          value: 'host',
+          label: 'Admin',
+          value: 'admin',
         },
         {
           label: 'Customer',
           value: 'customer',
         },
         {
+          label: 'Host',
+          value: 'host',
+        },
+        {
           label: 'Guest',
           value: 'guest',
         },
       ],
-      required: true,
-      defaultValue: ['guest'],
+      access: {
+        create: ({ req: { user } }) => {
+          return user?.role?.includes('admin') || false
+        },
+        update: ({ req: { user } }) => {
+          return user?.role?.includes('admin') || false
+        },
+      },
     },
   ],
   timestamps: true,
 }
+
+export default Users
