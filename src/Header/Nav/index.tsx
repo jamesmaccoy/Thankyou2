@@ -33,16 +33,6 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
         return <CMSLink key={i} {...link} appearance="link" />
       })}
       
-      {/* Add Account link for logged-in users */}
-      {currentUser && (
-        <Link 
-          href="/account" 
-          className={buttonVariants({ variant: "link" })}
-        >
-          Account
-        </Link>
-      )}
-      
       {/* Add Plek Management link for customers and hosts */}
       {isCustomerOrHost && (
         <Link 
