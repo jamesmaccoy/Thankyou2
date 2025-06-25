@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
     // Get the requested role from the request body
     const { targetRole } = await request.json()
     
-    if (!targetRole || !['customer', 'host'].includes(targetRole)) {
+    if (!targetRole || targetRole !== 'host') {
       return NextResponse.json({ 
-        error: 'Invalid target role. Must be either "customer" or "host"' 
+        error: 'Invalid target role. Must be "host"' 
       }, { status: 400 })
     }
 

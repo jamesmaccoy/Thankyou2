@@ -8,6 +8,17 @@ const Users: CollectionConfig = {
     useAsTitle: 'name',
     defaultColumns: ['name', 'email'],
   },
+  hooks: {
+    beforeChange: [
+      ({ data, operation }) => {
+        // Ensure new users get guest role if no role is provided
+        if (operation === 'create' && (!data.role || data.role.length === 0)) {
+          data.role = ['guest']
+        }
+        return data
+      },
+    ],
+  },
   access: {
     read: ({ req: { user } }) => {
       // Admins can see all users
@@ -69,7 +80,8 @@ const Users: CollectionConfig = {
       ],
       access: {
         create: ({ req: { user } }) => {
-          return user?.role?.includes('admin') || false
+          // Allow setting role during registration (when user is null) or by admin
+          return !user || user?.role?.includes('admin') || false
         },
         update: ({ req: { user } }) => {
           return user?.role?.includes('admin') || false

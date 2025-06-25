@@ -6,7 +6,7 @@ import { useSubscription } from '@/hooks/useSubscription'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, Users, Star, Crown, AlertCircle } from 'lucide-react'
+import { CheckCircle, Crown, Star, AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface RoleUpgradeProps {
@@ -21,10 +21,20 @@ export const RoleUpgrade: React.FC<RoleUpgradeProps> = ({ className }) => {
   const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null)
 
   // Check if user is a guest and has a subscription
-  const isGuest = currentUser?.role?.includes('guest') && !currentUser?.role?.includes('customer') && !currentUser?.role?.includes('host')
+  const isGuest = currentUser?.role?.includes('guest') && !currentUser?.role?.includes('host')
   const canUpgrade = isGuest && isSubscribed
 
-  const handleRoleUpgrade = async (targetRole: 'customer' | 'host') => {
+  // Debug logging
+  console.log('RoleUpgrade Debug:', {
+    currentUser: currentUser,
+    userRoles: currentUser?.role,
+    isGuest: isGuest,
+    isSubscribed: isSubscribed,
+    isSubscriptionLoading: isSubscriptionLoading,
+    canUpgrade: canUpgrade
+  })
+
+  const handleRoleUpgrade = async () => {
     setIsUpgrading(true)
     setUpgradeError(null)
     setUpgradeSuccess(null)
@@ -36,7 +46,7 @@ export const RoleUpgrade: React.FC<RoleUpgradeProps> = ({ className }) => {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ targetRole }),
+        body: JSON.stringify({ targetRole: 'host' }),
       })
 
       const data = await response.json()
@@ -65,14 +75,14 @@ export const RoleUpgrade: React.FC<RoleUpgradeProps> = ({ className }) => {
 
   return (
     <div className={className}>
-      <Card className="w-full max-w-2xl mx-auto">
+      <Card className="w-full max-w-lg mx-auto border-2 border-purple-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Star className="h-5 w-5 text-yellow-500" />
-            Upgrade Your Account
+            Activate Your Host Account
           </CardTitle>
           <CardDescription>
-            You have an active host subscription! Choose your account type to unlock features.
+            You have an active host subscription! Activate your host privileges to start managing your pleks.
           </CardDescription>
         </CardHeader>
         
@@ -91,104 +101,57 @@ export const RoleUpgrade: React.FC<RoleUpgradeProps> = ({ className }) => {
             </Alert>
           )}
 
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Customer Role */}
-            <Card className="border-2 hover:border-blue-300 transition-colors">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Users className="h-5 w-5 text-blue-500" />
-                  Customer
-                </CardTitle>
-                <CardDescription>
-                  Perfect for booking stays and creating listings
-                </CardDescription>
-              </CardHeader>
-              
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Create and manage your plek listings
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Book stays at other pleks
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Manage your bookings and estimates
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Access to customer features
-                  </div>
+          <Card className="border-2 border-purple-300 bg-gradient-to-br from-purple-50 to-purple-100">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Crown className="h-5 w-5 text-purple-600" />
+                Host Account
+                <Badge className="bg-purple-600 text-white text-xs">Ready to Activate</Badge>
+              </CardTitle>
+              <CardDescription>
+                Unlock full hosting capabilities for your pleks
+              </CardDescription>
+            </CardHeader>
+            
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Create and manage multiple plek listings
                 </div>
-              </CardContent>
-              
-              <CardFooter>
-                <Button 
-                  onClick={() => handleRoleUpgrade('customer')}
-                  disabled={isUpgrading}
-                  className="w-full"
-                  variant="outline"
-                >
-                  {isUpgrading ? 'Upgrading...' : 'Become a Customer'}
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* Host Role */}
-            <Card className="border-2 border-purple-200 hover:border-purple-300 transition-colors">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Crown className="h-5 w-5 text-purple-500" />
-                  Host
-                  <Badge variant="secondary" className="text-xs">Recommended</Badge>
-                </CardTitle>
-                <CardDescription>
-                  Full access to host multiple properties
-                </CardDescription>
-              </CardHeader>
-              
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Everything in Customer, plus:
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Host multiple properties
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Advanced analytics and insights
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Priority support
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Access to host-only features
-                  </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Access booking management tools
                 </div>
-              </CardContent>
-              
-              <CardFooter>
-                <Button 
-                  onClick={() => handleRoleUpgrade('host')}
-                  disabled={isUpgrading}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
-                >
-                  {isUpgrading ? 'Upgrading...' : 'Become a Host'}
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Create blog posts and content
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Advanced analytics and insights
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Priority support and features
+                </div>
+              </div>
+            </CardContent>
+            
+            <CardFooter>
+              <Button 
+                onClick={handleRoleUpgrade}
+                disabled={isUpgrading}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                size="lg"
+              >
+                {isUpgrading ? 'Activating...' : 'Activate Host Account'}
+              </Button>
+            </CardFooter>
+          </Card>
 
           <div className="text-xs text-gray-500 text-center">
-            You can change your role again later if needed. Your subscription will remain active.
+            Your subscription will remain active. You can access all host features immediately after activation.
           </div>
         </CardContent>
       </Card>
