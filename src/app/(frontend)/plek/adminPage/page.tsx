@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { getPayload } from "payload"
 import config from "@payload-config"
 import PlekAdminClient from "./page.client"
+import Link from "next/link"
 
 export default async function PlekAdminPage() {
   let userAuth
@@ -19,9 +20,9 @@ export default async function PlekAdminPage() {
 
   const user = userAuth.user
 
-  // Check if user has customer or admin role
+  // Check if user has customer or host role
   const userRoles = user.role || []
-  if (!userRoles.includes('customer') && !userRoles.includes('admin')) {
+  if (!userRoles.includes('customer') && !userRoles.includes('host')) {
     redirect('/?error=unauthorized')
   }
 
@@ -54,6 +55,12 @@ export default async function PlekAdminPage() {
         initialPosts={userPosts.docs}
         categories={categories.docs}
       />
+      <Link
+        href="/host"
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+      >
+        Go to Host Panel
+      </Link>
     </div>
   )
 } 

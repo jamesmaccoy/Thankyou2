@@ -11,7 +11,7 @@ import {
 
 import { authenticated } from '../../access/authenticated'
 import { authenticatedOrPublished } from '../../access/authenticatedOrPublished'
-import { adminOrCustomer } from '../../access/adminOrCustomer'
+import { hostOrCustomer } from '../../access/adminOrCustomer'
 import { Banner } from '../../blocks/Banner/config'
 import { Code } from '../../blocks/Code/config'
 import { MediaBlock } from '../../blocks/MediaBlock/config'
@@ -32,10 +32,10 @@ import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: adminOrCustomer,
+    create: hostOrCustomer,
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('host')) return true
       if (user.role?.includes('customer')) {
         return {
           authors: {
@@ -48,7 +48,7 @@ export const Posts: CollectionConfig<'posts'> = {
     read: authenticatedOrPublished,
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('host')) return true
       if (user.role?.includes('customer')) {
         return {
           authors: {
@@ -75,7 +75,7 @@ export const Posts: CollectionConfig<'posts'> = {
     hidden: ({ user }) => {
       if (!user) return true
       const roles = user.role || []
-      return !roles.includes('admin') && !roles.includes('customer')
+      return !roles.includes('host') && !roles.includes('customer')
     },
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {

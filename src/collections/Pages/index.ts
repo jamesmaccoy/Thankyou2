@@ -2,7 +2,7 @@ import type { CollectionConfig } from 'payload'
 
 import { authenticated } from '../../access/authenticated'
 import { authenticatedOrPublished } from '../../access/authenticatedOrPublished'
-import { adminOrCustomer } from '../../access/adminOrCustomer'
+import { hostOrCustomer } from '../../access/adminOrCustomer'
 import { Archive } from '../../blocks/ArchiveBlock/config'
 import { CallToAction } from '../../blocks/CallToAction/config'
 import { Content } from '../../blocks/Content/config'
@@ -25,10 +25,10 @@ import {
 export const Pages: CollectionConfig<'pages'> = {
   slug: 'pages',
   access: {
-    create: adminOrCustomer,
+    create: hostOrCustomer,
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('host')) return true
       if (user.role?.includes('customer')) {
         return {
           owner: {
@@ -41,7 +41,7 @@ export const Pages: CollectionConfig<'pages'> = {
     read: authenticatedOrPublished,
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('host')) return true
       if (user.role?.includes('customer')) {
         return {
           owner: {
@@ -63,7 +63,7 @@ export const Pages: CollectionConfig<'pages'> = {
     hidden: ({ user }) => {
       if (!user) return true
       const roles = user.role || []
-      return !roles.includes('admin') && !roles.includes('customer')
+      return !roles.includes('host') && !roles.includes('customer')
     },
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {
@@ -98,7 +98,7 @@ export const Pages: CollectionConfig<'pages'> = {
       admin: {
         position: 'sidebar',
         condition: (data, siblingData, { user }) => {
-          return Boolean(user?.role?.includes('admin'))
+          return Boolean(user?.role?.includes('host'))
         },
       },
       defaultValue: ({ user }) => user?.id,

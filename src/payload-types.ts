@@ -228,7 +228,7 @@ export interface Booking {
 export interface User {
   id: string;
   name?: string | null;
-  role: ('admin' | 'customer' | 'guest')[];
+  role: ('host' | 'customer' | 'guest')[];
   updatedAt: string;
   createdAt: string;
   email: string;

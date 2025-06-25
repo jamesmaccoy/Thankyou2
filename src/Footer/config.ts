@@ -12,7 +12,7 @@ export const Footer: GlobalConfig = {
     hidden: ({ user }) => {
       if (!user) return true
       const roles = user.role || []
-      return !roles.includes('admin') && !roles.includes('customer')
+      return !roles.includes('host') && !roles.includes('customer')
     },
   },
   fields: [

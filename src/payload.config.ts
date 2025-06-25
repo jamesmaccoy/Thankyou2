@@ -108,4 +108,7 @@ export default buildConfig({
     },
     tasks: [],
   },
+  routes: {
+    admin: '/host',
+  },
 })
