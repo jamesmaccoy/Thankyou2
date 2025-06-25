@@ -19,6 +19,7 @@ import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
 import { Booking } from './collections/Bookings'
 import { Estimate } from './collections/Estimates'
+import { AuthRequests } from './collections/AuthRequests/index' // <-- change to:
 //import analyticsRouter from '@/app/api/analytics/route'
 
 const filename = fileURLToPath(import.meta.url)
@@ -67,7 +68,7 @@ export default buildConfig({
   db: mongooseAdapter({
     url: process.env.DATABASE_URI || '',
   }),
-  collections: [Booking, Estimate, Pages, Posts, Media, Categories, Users],
+  collections: [Booking, Estimate, Pages, Posts, Media, Categories, Users, AuthRequests],
   cors: [getServerSideURL()].filter(Boolean),
   globals: [Header, Footer],
   plugins: [
