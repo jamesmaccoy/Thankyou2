@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { getPayload } from 'payload'
 import { Estimate } from '@/payload-types'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 // import { fetchLatestEstimate } from '@/utilities/fetchLatestEstimate'
 // import { BookingsList } from './BookingsList'
 
@@ -47,15 +48,49 @@ export default async function Bookings() {
 
   const payload = await getPayload({ config: configPromise })
 
-  const where: Where = {
-    customer: {
-      equals: user.id,
-    },
+  // Get bookings where user is customer or guest
+  const bookingsWhere: Where = {
+    or: [
+      {
+        customer: {
+          equals: user.id,
+        },
+      },
+      {
+        guests: {
+          contains: user.id,
+        },
+      },
+    ],
   }
 
   const bookings = await payload.find({
     collection: 'bookings',
-    where,
+    where: bookingsWhere,
+    sort: '-createdAt',
+    pagination: false,
+    depth: 2,
+  })
+
+  // Get estimates where user is customer or guest
+  const estimatesWhere: Where = {
+    or: [
+      {
+        customer: {
+          equals: user.id,
+        },
+      },
+      {
+        guests: {
+          contains: user.id,
+        },
+      },
+    ],
+  }
+
+  const estimates = await payload.find({
+    collection: 'estimates',
+    where: estimatesWhere,
     sort: '-createdAt',
     pagination: false,
     depth: 2,
@@ -74,6 +109,24 @@ export default async function Bookings() {
       title: post?.title || 'Untitled Booking',
       slug: post?.slug,
       meta: post?.meta,
+      type: 'booking' as const,
+      customer: booking.customer,
+    }
+  })
+
+  // Map estimates to the format expected by BookingCard
+  const formattedEstimates = estimates.docs.map((estimate) => {
+    const post = estimate.post as Post
+    return {
+      id: estimate.id,
+      fromDate: estimate.fromDate,
+      toDate: estimate.toDate,
+      guests: estimate.guests || [],
+      title: post?.title || 'Untitled Estimate',
+      slug: post?.slug,
+      meta: post?.meta,
+      type: 'estimate' as const,
+      customer: estimate.customer,
     }
   })
 
@@ -81,7 +134,7 @@ export default async function Bookings() {
     <main className="container py-8">
       <PageClient />
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold tracking-tight mb-8">Your Bookings</h1>
+        <h1 className="text-4xl font-bold tracking-tight mb-8">Your Bookings & Estimates</h1>
         
         {latestEstimate && (
           <div className="mb-8 p-6 bg-muted rounded-lg border">
@@ -95,9 +148,9 @@ export default async function Bookings() {
           </div>
         )}
         
-        {bookings.docs.length === 0 ? (
+        {bookings.docs.length === 0 && estimates.docs.length === 0 ? (
           <div className="text-center py-12">
-            <h2 className="text-2xl font-semibold mb-4">No bookings yet</h2>
+            <h2 className="text-2xl font-semibold mb-4">No bookings or estimates yet</h2>
             <p className="text-muted-foreground mb-6">
               Explore our properties and make your first booking.
             </p>
@@ -106,11 +159,39 @@ export default async function Bookings() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-6">
-            {formattedBookings.map((booking) => (
-              <BookingCard key={booking.id} booking={booking} />
-            ))}
-          </div>
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="all">All ({formattedBookings.length + formattedEstimates.length})</TabsTrigger>
+              <TabsTrigger value="bookings">Bookings ({formattedBookings.length})</TabsTrigger>
+              <TabsTrigger value="estimates">Estimates ({formattedEstimates.length})</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="all" className="space-y-6 mt-6">
+              <div className="grid gap-6">
+                {[...formattedBookings, ...formattedEstimates]
+                  .sort((a, b) => new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime())
+                  .map((item) => (
+                    <BookingCard key={`${item.type}-${item.id}`} booking={item} />
+                  ))}
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="bookings" className="space-y-6 mt-6">
+              <div className="grid gap-6">
+                {formattedBookings.map((booking) => (
+                  <BookingCard key={booking.id} booking={booking} />
+                ))}
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="estimates" className="space-y-6 mt-6">
+              <div className="grid gap-6">
+                {formattedEstimates.map((estimate) => (
+                  <BookingCard key={estimate.id} booking={estimate} />
+                ))}
+              </div>
+            </TabsContent>
+          </Tabs>
         )}
       </div>
       <PageClient />
