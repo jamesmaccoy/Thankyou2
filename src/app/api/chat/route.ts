@@ -45,18 +45,19 @@ export async function POST(req: Request) {
       fromDate: new Date(booking.fromDate).toLocaleDateString(),
       toDate: new Date(booking.toDate).toLocaleDateString(),
       status: booking.paymentStatus,
-      post: typeof booking.post === 'string' ? booking.post : booking.post.title,
+      packageName: booking.packageDetails?.name || booking.packageType || '',
     }))
 
     const estimatesInfo = estimates.docs.map((estimate) => ({
       id: estimate.id,
-      title: estimate.title,
+      title:
+        typeof estimate.post === 'string' ? estimate.title : estimate.post?.title || estimate.title,
       total: estimate.total,
       fromDate: new Date(estimate.fromDate).toLocaleDateString(),
       toDate: new Date(estimate.toDate).toLocaleDateString(),
       status: estimate.paymentStatus,
-      packageType: estimate.packageType,
-      post: typeof estimate.post === 'string' ? estimate.post : estimate.post.title,
+      packageName: estimate.packageType || '',
+      link: `${process.env.NEXT_PUBLIC_URL}/estimate/${estimate.id}`,
     }))
 
     // Create a context with the user's data
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
               Estimates:
               ${JSON.stringify(context.estimates, null, 2)}
               
-              Help users with their bookings and provide information about estimates based on their actual data. Don't use asterisks in your response, only speak words and skip symbols. Never read out booking or estimate IDs, but remain knowledgeable about the package types and features. For estimate details, provide links as <a href="${process.env.NEXT_PUBLIC_URL}/estimates/[id]">click here</a>. If there are duplicate estimates, list only once.`,
+              Help users with their bookings and provide information about estimates based on their actual data. Always mention the package name for both bookings and estimates (use the 'packageName' property). For estimate details, never print the raw link; always provide a clickable link as <a href=\"[link]\">click here</a> using the 'link' property. Don't use asterisks in your response, only speak words and skip symbols. Never read out booking or estimate IDs, but remain knowledgeable about the package types and features. If there are duplicate estimates, list only once. Do not mention the post property, only use the title for reference.`,
             },
           ],
         },
