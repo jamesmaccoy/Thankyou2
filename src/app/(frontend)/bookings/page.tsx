@@ -75,7 +75,7 @@ export default async function Bookings() {
     depth: 2,
   })
 
-  // Get estimates where user is customer or guest
+  // Get estimates where user is customer or guest - only fetch the latest one
   const estimatesWhere: Where = {
     or: [
       {
@@ -95,7 +95,7 @@ export default async function Bookings() {
     collection: 'estimates',
     where: estimatesWhere,
     sort: '-createdAt',
-    pagination: false,
+    limit: 1, // Only get the latest estimate
     depth: 2,
   })
 
@@ -239,7 +239,7 @@ export default async function Bookings() {
           </div>
         )}
         
-        {latestEstimate && (
+        {/*{latestEstimate && (
           <div className="mb-8 p-6 bg-muted rounded-lg border">
             <h2 className="text-lg font-semibold mb-2">Latest Estimate</h2>
             <p className="text-muted-foreground mb-4">
@@ -249,7 +249,7 @@ export default async function Bookings() {
               <Button>Complete Estimate</Button>
             </Link>
           </div>
-        )}
+        )}*/}
         
         {bookings.docs.length === 0 && estimates.docs.length === 0 ? (
           <div className="text-center py-12">

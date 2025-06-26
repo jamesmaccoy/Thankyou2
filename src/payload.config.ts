@@ -25,6 +25,20 @@ import { isAdmin } from './access/isAdmin'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+// Create a function that allows both admin and host users
+const isAdminOrHost = ({ req }: { req: PayloadRequest }) => {
+  if (!req.user) return false
+  const roles = req.user.role || []
+  return roles.includes('admin') || roles.includes('host')
+}
+
+// Create a function that allows only admin users for system collections
+const isAdminOnly = ({ req }: { req: PayloadRequest }) => {
+  if (!req.user) return false
+  const roles = req.user.role || []
+  return roles.includes('admin')
+}
+
 export default buildConfig({
   admin: {
     components: {
@@ -120,39 +134,39 @@ export default buildConfig({
             }
             payload.collections[collectionSlug].config.admin.group = 'System'
             
-            // Set access controls for the collection
+            // Set access controls for the collection - allow hosts to read (needed for admin panel), but restrict other operations to admin only
             payload.collections[collectionSlug].config.access = {
-              create: isAdmin,
-              read: isAdmin,
-              update: isAdmin,
-              delete: isAdmin,
-              admin: isAdmin,
+              create: isAdminOnly,
+              read: isAdminOrHost, // Hosts need read access for admin panel to function
+              update: isAdminOnly,
+              delete: isAdminOnly,
+              admin: isAdminOnly, // Still restrict admin UI access to admins only
             }
           }
         })
         
-        // Hide admin/host-only collections from customer users
+        // Hide admin-only collections from non-admin users (changed from admin/host to admin-only)
         adminHostCollections.forEach(collectionSlug => {
           if (payload.collections[collectionSlug]) {
             payload.collections[collectionSlug].config.admin.hidden = ({ user }: { user: any }) => {
               if (!user) return true
               const roles = user.role || []
-              return !roles.includes('admin') && !roles.includes('host')
+              return !roles.includes('admin')
             }
             payload.collections[collectionSlug].config.admin.group = 'Admin/Host'
           }
         })
         
-        // Hide globals from customer users
+        // Hide globals from non-admin users (changed from customer users to non-admin users)
         const adminHostGlobals = ['header', 'footer']
         adminHostGlobals.forEach(globalSlug => {
           if (payload.globals[globalSlug]) {
             payload.globals[globalSlug].config.admin.hidden = ({ user }: { user: any }) => {
               if (!user) return true
               const roles = user.role || []
-              return !roles.includes('admin') && !roles.includes('host')
+              return !roles.includes('admin')
             }
-            payload.globals[globalSlug].config.admin.group = 'Admin/Host'
+            payload.globals[globalSlug].config.admin.group = 'Globals'
           }
         })
       }

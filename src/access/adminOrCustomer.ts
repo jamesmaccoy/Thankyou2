@@ -7,5 +7,5 @@ export const hostOrCustomer: HostOrCustomer = ({ req: { user } }) => {
   if (!user) return false
   
   const roles = user.role || []
-  return roles.includes('host') || roles.includes('customer')
+  return roles.includes('host') || roles.includes('customer') || roles.includes('admin')
 } 

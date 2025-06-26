@@ -46,7 +46,10 @@ const Users: CollectionConfig = {
     },
     delete: isAdmin,
     admin: ({ req: { user } }) => {
-      return user?.role?.includes('admin') || false
+      if (!user) return false
+      const roles = user.role || []
+      // Allow admins, hosts, and customers to access the admin panel
+      return roles.includes('admin') || roles.includes('host') || roles.includes('customer')
     },
   },
   auth: true,

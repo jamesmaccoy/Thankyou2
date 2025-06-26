@@ -12,8 +12,9 @@ export const Header: GlobalConfig = {
     hidden: ({ user }) => {
       if (!user) return true
       const roles = user.role || []
-      return !roles.includes('host') && !roles.includes('customer')
+      return !roles.includes('admin')
     },
+    group: 'Globals',
   },
   fields: [
     {

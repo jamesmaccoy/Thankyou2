@@ -32,7 +32,7 @@ export const plugins: Plugin[] = [
         hidden: ({ user }) => {
           if (!user) return true
           const roles = user.role || []
-          return !roles.includes('admin') && !roles.includes('host')
+          return !roles.includes('admin')
         },
         group: 'Admin/Host',
       },
@@ -72,7 +72,7 @@ export const plugins: Plugin[] = [
         hidden: ({ user }) => {
           if (!user) return true
           const roles = user.role || []
-          return !roles.includes('admin') && !roles.includes('host')
+          return !roles.includes('admin')
         },
         group: 'Admin/Host',
       },
@@ -101,7 +101,7 @@ export const plugins: Plugin[] = [
         hidden: ({ user }) => {
           if (!user) return true
           const roles = user.role || []
-          return !roles.includes('admin') && !roles.includes('host')
+          return !roles.includes('admin')
         },
         group: 'Admin/Host',
       },
@@ -115,7 +115,7 @@ export const plugins: Plugin[] = [
         hidden: ({ user }) => {
           if (!user) return true
           const roles = user.role || []
-          return !roles.includes('admin') && !roles.includes('host')
+          return !roles.includes('admin')
         },
         group: 'Admin/Host',
       },

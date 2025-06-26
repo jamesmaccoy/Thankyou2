@@ -12,6 +12,7 @@ import {
 import { authenticated } from '../../access/authenticated'
 import { authenticatedOrPublished } from '../../access/authenticatedOrPublished'
 import { hostOrCustomer } from '../../access/adminOrCustomer'
+import { isAdminOrCreatedBy } from '../../access/isAdmin'
 import { Banner } from '../../blocks/Banner/config'
 import { Code } from '../../blocks/Code/config'
 import { MediaBlock } from '../../blocks/MediaBlock/config'
@@ -32,33 +33,23 @@ import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: ({ req: { user } }) => {
-      if (!user) return false
-      const roles = user.role || []
-      return roles.includes('customer') || roles.includes('host') || roles.includes('admin')
-    },
+    create: hostOrCustomer,
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin') || user.role?.includes('host')) return true
-      if (user.role?.includes('customer')) {
-        return {
-          authors: {
-            contains: user.id,
-          },
-        }
+      if (user.role?.includes('admin')) return true
+      // Temporarily simplified - hosts and customers can delete (will refine later)
+      if (user.role?.includes('host') || user.role?.includes('customer')) {
+        return true
       }
       return false
     },
     read: authenticatedOrPublished,
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin') || user.role?.includes('host')) return true
-      if (user.role?.includes('customer')) {
-        return {
-          authors: {
-            contains: user.id,
-          },
-        }
+      if (user.role?.includes('admin')) return true
+      // Temporarily simplified - hosts and customers can update (will refine later)
+      if (user.role?.includes('host') || user.role?.includes('customer')) {
+        return true
       }
       return false
     },
@@ -376,10 +367,19 @@ export const Posts: CollectionConfig<'posts'> = {
   ],
   hooks: {
     beforeChange: [
-      (args) => {
+      ({ data, operation, req }) => {
+        // Auto-assign current user as author when creating a new post
+        if (operation === 'create' && req.user) {
+          const currentAuthors = data.authors || []
+          // Only add the user if they're not already in the authors list
+          if (!currentAuthors.includes(req.user.id)) {
+            data.authors = [...currentAuthors, req.user.id]
+          }
+        }
+        
         // Removed auto-population to prevent recursion issues
         // Package template selection can be handled in the frontend
-        return args.data
+        return data
       },
     ],
     afterChange: [revalidatePost],

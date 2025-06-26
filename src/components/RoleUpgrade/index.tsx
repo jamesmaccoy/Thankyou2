@@ -22,13 +22,15 @@ export const RoleUpgrade: React.FC<RoleUpgradeProps> = ({ className }) => {
 
   // Check if user is a guest and has a subscription
   const isGuest = currentUser?.role?.includes('guest') && !currentUser?.role?.includes('host')
-  const canUpgrade = isGuest && isSubscribed
+  const isCustomer = currentUser?.role?.includes('customer') && !currentUser?.role?.includes('host')
+  const canUpgrade = (isGuest || isCustomer) && isSubscribed
 
   // Debug logging
   console.log('RoleUpgrade Debug:', {
     currentUser: currentUser,
     userRoles: currentUser?.role,
     isGuest: isGuest,
+    isCustomer: isCustomer,
     isSubscribed: isSubscribed,
     isSubscriptionLoading: isSubscriptionLoading,
     canUpgrade: canUpgrade
