@@ -1,11 +1,11 @@
 import { FieldAccess } from 'payload'
 
-export const adminOrSelfField =
+export const hostOrSelfField =
   (field: string): FieldAccess =>
   ({ req: { user }, doc }) => {
     if (!user) return false
 
-    if (user?.role?.includes('admin')) {
+    if (user?.role?.includes('host')) {
       return true
     }
 

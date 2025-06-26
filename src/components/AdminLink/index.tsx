@@ -29,11 +29,11 @@ export const AdminLink: React.FC<AdminLinkProps> = ({ children, className }) => 
       return
     }
 
-    router.push('/admin')
+    router.push('/host')
   }
 
   return (
-    <Link href="/admin" onClick={handleClick} className={className}>
+    <Link href="/host" onClick={handleClick} className={className}>
       {children}
     </Link>
   )

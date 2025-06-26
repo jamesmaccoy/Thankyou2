@@ -32,8 +32,9 @@ export const plugins: Plugin[] = [
         hidden: ({ user }) => {
           if (!user) return true
           const roles = user.role || []
-          return !roles.includes('admin') && !roles.includes('customer')
+          return !roles.includes('admin') && !roles.includes('host')
         },
+        group: 'Admin/Host',
       },
       // @ts-expect-error - This is a valid override, mapped fields don't resolve to the same type
       fields: ({ defaultFields }) => {
@@ -71,8 +72,9 @@ export const plugins: Plugin[] = [
         hidden: ({ user }) => {
           if (!user) return true
           const roles = user.role || []
-          return !roles.includes('admin') && !roles.includes('customer')
+          return !roles.includes('admin') && !roles.includes('host')
         },
+        group: 'Admin/Host',
       },
       fields: ({ defaultFields }) => {
         return defaultFields.map((field) => {
@@ -99,8 +101,9 @@ export const plugins: Plugin[] = [
         hidden: ({ user }) => {
           if (!user) return true
           const roles = user.role || []
-          return !roles.includes('admin') && !roles.includes('customer')
+          return !roles.includes('admin') && !roles.includes('host')
         },
+        group: 'Admin/Host',
       },
     },
   }),
@@ -108,6 +111,14 @@ export const plugins: Plugin[] = [
     collections: ['posts'],
     beforeSync: beforeSyncWithSearch,
     searchOverrides: {
+      admin: {
+        hidden: ({ user }) => {
+          if (!user) return true
+          const roles = user.role || []
+          return !roles.includes('admin') && !roles.includes('host')
+        },
+        group: 'Admin/Host',
+      },
       fields: ({ defaultFields }) => {
         return [...defaultFields, ...searchFields]
       },

@@ -10,3 +10,13 @@ export const isAdmin: Access<User> = ({ req: { user } }) => {
 
   return false
 }
+
+export const isHost: Access<User> = ({ req: { user } }) => {
+  if (!user) return false
+
+  if (user?.role?.includes('host')) {
+    return true
+  }
+
+  return false
+}

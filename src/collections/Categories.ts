@@ -1,23 +1,23 @@
 import type { CollectionConfig } from 'payload'
 
+import { hostOrCustomer } from '../access/adminOrCustomer'
 import { anyone } from '../access/anyone'
 import { authenticated } from '../access/authenticated'
-import { adminOrCustomer } from '../access/adminOrCustomer'
 import { slugField } from '@/fields/slug'
 
 export const Categories: CollectionConfig = {
   slug: 'categories',
   access: {
-    create: adminOrCustomer,
-    delete: adminOrCustomer,
+    create: hostOrCustomer,
+    delete: hostOrCustomer,
     read: anyone,
-    update: adminOrCustomer,
+    update: hostOrCustomer,
   },
   admin: {
     hidden: ({ user }) => {
       if (!user) return true
       const roles = user.role || []
-      return !roles.includes('admin') && !roles.includes('customer')
+      return !roles.includes('host') && !roles.includes('customer')
     },
     useAsTitle: 'title',
   },

@@ -25,7 +25,7 @@ export default function SubscribePage() {
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
-      console.log('User already subscribed, redirecting to /admin from useEffect.')
+      console.log('User already subscribed, redirecting to /host from useEffect.')
       router.push('/bookings')
     }
   }, [isLoading, isSubscribed, router])
@@ -54,7 +54,7 @@ export default function SubscribePage() {
       await Purchases.getSharedInstance().purchase({
         rcPackage: pkg
       })
-      router.push('/admin')
+      router.push('/host')
     } catch (purchaseError) {
       const rcError = purchaseError as PurchasesError
       console.error('RevenueCat Purchase Error (Full Object):', rcError)
