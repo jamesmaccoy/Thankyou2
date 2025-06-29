@@ -33,25 +33,59 @@ import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: hostOrCustomer,
-    delete: ({ req: { user } }) => {
+    create: ({ req: { user } }) => {
+      // Definitive access control for Plek creation
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      // Temporarily simplified - hosts and customers can delete (will refine later)
-      if (user.role?.includes('host') || user.role?.includes('customer')) {
-        return true
-      }
-      return false
+      
+      const roles = user.role || []
+      
+      // Allow admins, hosts, and customers to create Pleks
+      return roles.includes('admin') || roles.includes('host') || roles.includes('customer')
     },
     read: authenticatedOrPublished,
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      // Temporarily simplified - hosts and customers can update (will refine later)
-      if (user.role?.includes('host') || user.role?.includes('customer')) {
-        return true
+      const roles = user.role || []
+      
+      // Allow admins full access
+      if (roles.includes('admin')) return true
+      
+      // Allow hosts and customers to update their own posts
+      if (roles.includes('host') || roles.includes('customer')) {
+        return {
+          authors: {
+            contains: user.id,
+          },
+        }
       }
+      
       return false
+    },
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      const roles = user.role || []
+      
+      // Allow admins full access
+      if (roles.includes('admin')) return true
+      
+      // Allow hosts and customers to delete their own posts
+      if (roles.includes('host') || roles.includes('customer')) {
+        return {
+          authors: {
+            contains: user.id,
+          },
+        }
+      }
+      
+      return false
+    },
+    // Adding explicit admin access control
+    admin: ({ req: { user } }) => {
+      if (!user) return false
+      const roles = user.role || []
+      
+      // Allow admins, hosts, and customers to access admin interface
+      return roles.includes('admin') || roles.includes('host') || roles.includes('customer')
     },
   },
   // This config controls what's populated by default when a post is referenced
@@ -73,6 +107,10 @@ export const Posts: CollectionConfig<'posts'> = {
       return !roles.includes('admin') && !roles.includes('host') && !roles.includes('customer')
     },
     defaultColumns: ['title', 'slug', 'updatedAt'],
+    group: 'Plek Creator',
+    useAsTitle: 'title',
+    description: '🏠 Create and manage your unique Pleks - your personal spaces for guests to discover and book',
+    listSearchableFields: ['title', 'slug'],
     livePreview: {
       url: ({ data, req }) => {
         const path = generatePreviewPath({
@@ -90,13 +128,16 @@ export const Posts: CollectionConfig<'posts'> = {
         collection: 'posts',
         req,
       }),
-    useAsTitle: 'title',
   },
   fields: [
     {
       name: 'title',
       type: 'text',
       required: true,
+      label: 'Plek Name',
+      admin: {
+        description: 'Give your Plek a memorable name that guests will love (e.g., "Cozy Mountain Retreat", "Urban Garden Oasis")',
+      },
     },
     {
       type: 'tabs',

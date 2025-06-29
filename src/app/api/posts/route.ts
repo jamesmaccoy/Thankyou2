@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     // Check if user has permission to create posts
     const userRoles = user.role || []
-    if (!userRoles.includes('admin') && !userRoles.includes('customer')) {
+    if (!userRoles.includes('admin') && !userRoles.includes('customer') && !userRoles.includes('host')) {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
         { status: 403 }
@@ -74,13 +74,22 @@ export async function POST(req: NextRequest) {
         // Handle JSON requests
         body = await req.json()
       } else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
-        // Handle form data requests
+        // Handle form data requests (Payload admin interface uses this)
         const formData = await req.formData()
         body = {} as any
         
         // Convert FormData to regular object
         for (const [key, value] of formData.entries()) {
-          if (key.includes('[') && key.includes(']')) {
+          if (key === '_payload') {
+            // Payload admin interface sends data as JSON string in _payload field
+            try {
+              const payloadData = JSON.parse(value as string)
+              body = { ...body, ...payloadData }
+            } catch (parseError) {
+              console.error('Failed to parse _payload JSON:', parseError)
+              body[key] = value
+            }
+          } else if (key.includes('[') && key.includes(']')) {
             // Handle nested form fields like "meta[title]"
             const match = key.match(/^(\w+)\[(\w+)\]$/)
             if (match && match.length >= 3) {
@@ -393,7 +402,7 @@ export async function DELETE(req: NextRequest) {
 
     // Check if user has permission to delete posts
     const userRoles = user.role || []
-    if (!userRoles.includes('admin') && !userRoles.includes('customer')) {
+    if (!userRoles.includes('admin') && !userRoles.includes('customer') && !userRoles.includes('host')) {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
         { status: 403 }
@@ -474,7 +483,7 @@ export async function PATCH(req: NextRequest) {
 
     // Check if user has permission to update posts
     const userRoles = user.role || []
-    if (!userRoles.includes('admin') && !userRoles.includes('customer')) {
+    if (!userRoles.includes('admin') && !userRoles.includes('customer') && !userRoles.includes('host')) {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
         { status: 403 }

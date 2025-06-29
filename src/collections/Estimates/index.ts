@@ -16,8 +16,15 @@ export const Estimate: CollectionConfig = {
     interface: 'Estimate',
   },
   admin: {
-    useAsTitle: 'id',
-    defaultColumns: ['customer', 'post', 'fromDate', 'toDate', 'guests'],
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('admin') && !roles.includes('host')
+    },
+    group: 'Plek Manager',
+    description: '💰 Review pricing estimates and booking inquiries for your Pleks',
+    defaultColumns: ['customer', 'plek', 'startDate', 'endDate', 'totalCost', 'createdAt'],
+    useAsTitle: 'customer',
   },
   endpoints: [
     // This endpoint is used to generate a token for the estimate

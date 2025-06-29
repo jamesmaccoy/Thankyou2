@@ -146,6 +146,8 @@ export interface UserAuthOperations {
   };
 }
 /**
+ * 📅 Manage your Plek bookings and guest reservations
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "bookings".
  */
@@ -241,11 +243,16 @@ export interface User {
   password?: string | null;
 }
 /**
+ * 🏠 Create and manage your unique Pleks - your personal spaces for guests to discover and book
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts".
  */
 export interface Post {
   id: string;
+  /**
+   * Give your Plek a memorable name that guests will love (e.g., "Cozy Mountain Retreat", "Urban Garden Oasis")
+   */
   title: string;
   heroImage?: (string | null) | Media;
   content: {
@@ -474,6 +481,8 @@ export interface Category {
   createdAt: string;
 }
 /**
+ * 💰 Review pricing estimates and booking inquiries for your Pleks
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "estimates".
  */

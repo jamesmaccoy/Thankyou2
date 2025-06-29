@@ -16,8 +16,15 @@ export const Booking: CollectionConfig = {
     interface: 'Booking',
   },
   admin: {
-    useAsTitle: 'id',
-    defaultColumns: ['customer', 'post', 'fromDate', 'toDate', 'guests'],
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('admin') && !roles.includes('host')
+    },
+    group: 'Plek Manager',
+    description: '📅 Manage your Plek bookings and guest reservations',
+    defaultColumns: ['customer', 'plek', 'startDate', 'endDate', 'paymentStatus', 'createdAt'],
+    useAsTitle: 'customer',
   },
   endpoints: [
     // This endpoint is used to generate a token for the booking
