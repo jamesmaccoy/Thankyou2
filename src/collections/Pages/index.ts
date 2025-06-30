@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 
 import { authenticated } from '../../access/authenticated'
 import { authenticatedOrPublished } from '../../access/authenticatedOrPublished'
+import { hostOrCustomer } from '../../access/adminOrCustomer'
 import { Archive } from '../../blocks/ArchiveBlock/config'
 import { CallToAction } from '../../blocks/CallToAction/config'
 import { Content } from '../../blocks/Content/config'
@@ -24,10 +25,32 @@ import {
 export const Pages: CollectionConfig<'pages'> = {
   slug: 'pages',
   access: {
-    create: authenticated,
-    delete: authenticated,
+    create: hostOrCustomer,
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('host')) return true
+      if (user.role?.includes('customer')) {
+        return {
+          owner: {
+            equals: user.id,
+          },
+        }
+      }
+      return false
+    },
     read: authenticatedOrPublished,
-    update: authenticated,
+    update: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('host')) return true
+      if (user.role?.includes('customer')) {
+        return {
+          owner: {
+            equals: user.id,
+          },
+        }
+      }
+      return false
+    },
   },
   // This config controls what's populated by default when a page is referenced
   // https://payloadcms.com/docs/queries/select#defaultpopulate-collection-config-property
@@ -37,6 +60,11 @@ export const Pages: CollectionConfig<'pages'> = {
     slug: true,
   },
   admin: {
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('host') && !roles.includes('customer')
+    },
     defaultColumns: ['title', 'slug', 'updatedAt'],
     livePreview: {
       url: ({ data, req }) => {
@@ -62,6 +90,28 @@ export const Pages: CollectionConfig<'pages'> = {
       name: 'title',
       type: 'text',
       required: true,
+    },
+    {
+      name: 'owner',
+      type: 'relationship',
+      relationTo: 'users',
+      admin: {
+        position: 'sidebar',
+        condition: (data, siblingData, { user }) => {
+          return Boolean(user?.role?.includes('host'))
+        },
+      },
+      defaultValue: ({ user }) => user?.id,
+      hooks: {
+        beforeChange: [
+          ({ req, value }) => {
+            if (!value && req.user) {
+              return req.user.id
+            }
+            return value
+          },
+        ],
+      },
     },
     {
       type: 'tabs',

@@ -22,7 +22,7 @@ export const homeStatic: RequiredDataFromCollectionSlug<'pages'> = {
                 format: 0,
                 mode: 'normal',
                 style: '',
-                text: 'Plek',
+                text: 'Stay at our self built plek',
                 version: 1,
               },
             ],
@@ -52,7 +52,7 @@ export const homeStatic: RequiredDataFromCollectionSlug<'pages'> = {
                 fields: {
                   linkType: 'custom',
                   newTab: false,
-                  url: '/admin',
+                  url: '/host',
                 },
                 format: '',
                 indent: 0,
@@ -83,7 +83,7 @@ export const homeStatic: RequiredDataFromCollectionSlug<'pages'> = {
     },
   },
   meta: {
-    description: 'Become a meber to see the calendar.',
+    description: 'Stay at our self built plek.',
     title: 'Plek',
   },
   title: 'Home',

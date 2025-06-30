@@ -5,42 +5,41 @@ import { getPayload } from "payload"
 import config from "@payload-config"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ConfettiCelebration } from "./confetti-celebration"
 
 export default async function BookingConfirmationPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  const currentUser = await getMeUser()
-  
-  if (!currentUser) {
-    return redirect("/login")
-  }
-  
-  const payload = await getPayload({ config })
-  
-  // Get the user's most recent booking
-  const bookings = await payload.find({
-    collection: "bookings",
-    where: {
-      customer: {
-        equals: currentUser.user.id,
-      },
-    },
-    sort: "-createdAt",
-    limit: 1,
-  })
-  
-  const booking = bookings.docs[0]
-  
-  // Calculate dates and duration
-  let fromDate = new Date()
-  let toDate = new Date()
+  const params = await searchParams
+  const bookingId = params.bookingId
   let duration = "N/A"
+
+  const payload = await getPayload({ config })
+
+  let booking = null
   
+  if (bookingId && typeof bookingId === "string") {
+    // Try to find the booking by ID
+    const bookings = await payload.find({
+      collection: 'bookings',
+      where: {
+        id: {
+          equals: bookingId,
+        },
+      },
+      depth: 2,
+      limit: 1,
+    })
+    
+    booking = bookings.docs[0] || null
+  }
+
+  // Calculate duration if we have a booking
   if (booking?.fromDate && booking?.toDate) {
-    fromDate = new Date(booking.fromDate)
-    toDate = new Date(booking.toDate)
+    const fromDate = new Date(booking.fromDate)
+    const toDate = new Date(booking.toDate)
     
     // Calculate duration in days
     const diffTime = Math.abs(toDate.getTime() - fromDate.getTime())
@@ -48,8 +47,8 @@ export default async function BookingConfirmationPage({
   }
   
   // Fallback to search params if booking not found
-  const bookingTotal = typeof searchParams.total === "string" ? searchParams.total : "N/A"
-  const bookingDuration = booking ? duration : (typeof searchParams.duration === "string" ? searchParams.duration : "N/A")
+  const bookingTotal = typeof params.total === "string" ? params.total : "N/A"
+  const bookingDuration = booking ? duration : (typeof params.duration === "string" ? params.duration : "N/A")
   const totalAmount = 
     !isNaN(Number(bookingTotal)) && !isNaN(Number(bookingDuration)) 
       ? Number(bookingTotal) * Number(bookingDuration) 
@@ -57,6 +56,7 @@ export default async function BookingConfirmationPage({
   
   return (
     <div className="container py-10">
+      <ConfettiCelebration />
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold tracking-tighter mb-4">Booking Confirmed!</h1>

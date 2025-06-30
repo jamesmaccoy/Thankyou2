@@ -11,7 +11,7 @@ import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
 import { Pages } from './collections/Pages'
 import { Posts } from './collections/Posts'
-import { Users } from './collections/Users'
+import Users from './collections/Users'
 import { Footer } from './Footer/config'
 import { Header } from './Header/config'
 import { plugins } from './plugins'
@@ -19,11 +19,26 @@ import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
 import { Booking } from './collections/Bookings'
 import { Estimate } from './collections/Estimates'
-import { AuthRequests } from './collections/AuthRequests/index' // <-- change to:
+import { AuthRequests } from './collections/AuthRequests/index'
+import { isAdmin } from './access/isAdmin'
 //import analyticsRouter from '@/app/api/analytics/route'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
+
+// Create a function that allows both admin and host users
+const isAdminOrHost = ({ req }: { req: PayloadRequest }) => {
+  if (!req.user) return false
+  const roles = req.user.role || []
+  return roles.includes('admin') || roles.includes('host')
+}
+
+// Create a function that allows only admin users for system collections
+const isAdminOnly = ({ req }: { req: PayloadRequest }) => {
+  if (!req.user) return false
+  const roles = req.user.role || []
+  return roles.includes('admin')
+}
 
 export default buildConfig({
   admin: {
@@ -88,6 +103,76 @@ export default buildConfig({
         media: true,
       },
     }),
+    // System collections access control plugin
+    (() => (incomingConfig: any): any => {
+      const config = { ...incomingConfig }
+      config.onInit = async (payload: any) => {
+        if (incomingConfig.onInit) await incomingConfig.onInit(payload)
+        
+        // Configure system collections to only be visible to admin users
+        const systemCollections = [
+          'payload-jobs',
+          'payload-preferences', 
+          'payload-locked-documents',
+          'payload-migrations'
+        ]
+        
+        // Configure collections that should be hidden from customer users
+        const adminHostCollections = [
+          'redirects',
+          'forms',
+          'form-submissions', 
+          'search'
+        ]
+        
+        systemCollections.forEach(collectionSlug => {
+          if (payload.collections[collectionSlug]) {
+            // Show collection but restrict access to admin only
+            payload.collections[collectionSlug].config.admin.hidden = ({ user }: { user: any }) => {
+              if (!user) return true
+              const roles = user.role || []
+              return !roles.includes('admin')
+            }
+            payload.collections[collectionSlug].config.admin.group = 'System'
+            
+            // Set access controls for the collection - allow hosts to read (needed for admin panel), but restrict other operations to admin only
+            payload.collections[collectionSlug].config.access = {
+              create: isAdminOnly,
+              read: isAdminOrHost, // Hosts need read access for admin panel to function
+              update: isAdminOnly,
+              delete: isAdminOnly,
+              admin: isAdminOnly, // Still restrict admin UI access to admins only
+            }
+          }
+        })
+        
+        // Hide admin-only collections from non-admin users (changed from admin/host to admin-only)
+        adminHostCollections.forEach(collectionSlug => {
+          if (payload.collections[collectionSlug]) {
+            payload.collections[collectionSlug].config.admin.hidden = ({ user }: { user: any }) => {
+              if (!user) return true
+              const roles = user.role || []
+              return !roles.includes('admin')
+            }
+            payload.collections[collectionSlug].config.admin.group = 'Admin/Host'
+          }
+        })
+        
+        // Hide globals from non-admin users (changed from customer users to non-admin users)
+        const adminHostGlobals = ['header', 'footer']
+        adminHostGlobals.forEach(globalSlug => {
+          if (payload.globals[globalSlug]) {
+            payload.globals[globalSlug].config.admin.hidden = ({ user }: { user: any }) => {
+              if (!user) return true
+              const roles = user.role || []
+              return !roles.includes('admin')
+            }
+            payload.globals[globalSlug].config.admin.group = 'Globals'
+          }
+        })
+      }
+      return config
+    })(),
   ],
   secret: process.env.PAYLOAD_SECRET,
   sharp,
@@ -108,5 +193,8 @@ export default buildConfig({
       },
     },
     tasks: [],
+  },
+  routes: {
+    admin: '/host',
   },
 })

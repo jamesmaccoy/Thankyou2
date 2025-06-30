@@ -58,6 +58,6 @@ export default async function Page() {
 
 export function generateMetadata(): Metadata {
   return {
-    title: `Plek Posts`,
+    title: `Plek - Stay at our self built plek`,
   }
 }

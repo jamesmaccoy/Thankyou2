@@ -15,7 +15,7 @@ import { Page, Post } from '@/payload-types'
 import { getServerSideURL } from '@/utilities/getURL'
 
 const generateTitle: GenerateTitle<Post | Page> = ({ doc }) => {
-  return doc?.title ? `${doc.title} | Self built plek` : 'Self built plek'
+  return doc?.title ? `${doc.title} | Stay at our self built plek` : 'Stay at our self built plek'
 }
 
 const generateURL: GenerateURL<Post | Page> = ({ doc }) => {
@@ -28,6 +28,14 @@ export const plugins: Plugin[] = [
   redirectsPlugin({
     collections: ['pages', 'posts'],
     overrides: {
+      admin: {
+        hidden: ({ user }) => {
+          if (!user) return true
+          const roles = user.role || []
+          return !roles.includes('admin')
+        },
+        group: 'Admin/Host',
+      },
       // @ts-expect-error - This is a valid override, mapped fields don't resolve to the same type
       fields: ({ defaultFields }) => {
         return defaultFields.map((field) => {
@@ -60,6 +68,14 @@ export const plugins: Plugin[] = [
       payment: false,
     },
     formOverrides: {
+      admin: {
+        hidden: ({ user }) => {
+          if (!user) return true
+          const roles = user.role || []
+          return !roles.includes('admin')
+        },
+        group: 'Admin/Host',
+      },
       fields: ({ defaultFields }) => {
         return defaultFields.map((field) => {
           if ('name' in field && field.name === 'confirmationMessage') {
@@ -80,11 +96,29 @@ export const plugins: Plugin[] = [
         })
       },
     },
+    formSubmissionOverrides: {
+      admin: {
+        hidden: ({ user }) => {
+          if (!user) return true
+          const roles = user.role || []
+          return !roles.includes('admin')
+        },
+        group: 'Admin/Host',
+      },
+    },
   }),
   searchPlugin({
     collections: ['posts'],
     beforeSync: beforeSyncWithSearch,
     searchOverrides: {
+      admin: {
+        hidden: ({ user }) => {
+          if (!user) return true
+          const roles = user.role || []
+          return !roles.includes('admin')
+        },
+        group: 'Admin/Host',
+      },
       fields: ({ defaultFields }) => {
         return [...defaultFields, ...searchFields]
       },

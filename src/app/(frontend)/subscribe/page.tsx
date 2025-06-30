@@ -15,6 +15,7 @@ export default function SubscribePage() {
   const [offerings, setOfferings] = useState<Offering[]>([])
   const [loadingOfferings, setLoadingOfferings] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isPurchasesConfigured, setIsPurchasesConfigured] = useState(false)
 
   useEffect(() => {
     if (isInitialized) {
@@ -24,7 +25,7 @@ export default function SubscribePage() {
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
-      console.log('User already subscribed, redirecting to /admin from useEffect.')
+      console.log('User already subscribed, redirecting to /host from useEffect.')
       router.push('/bookings')
     }
   }, [isLoading, isSubscribed, router])
@@ -32,16 +33,9 @@ export default function SubscribePage() {
   const loadOfferings = async () => {
     setLoadingOfferings(true)
     try {
-      console.log('RevenueCat API Key:', process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY)
-      console.log('Current User:', currentUser)
-      const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
-      console.log("Fetched Offerings Object:", fetchedOfferings)
-      if (fetchedOfferings.all) {
-        setOfferings(Object.values(fetchedOfferings.all))
-      } else {
-        console.warn("No current offering or packages found.")
-        setOfferings([])
-      }
+      const fetched = await Purchases.getSharedInstance().getOfferings()
+      console.log("Fetched Offerings Object:", fetched)
+      setOfferings(Object.values(fetched.all))
     } catch (err) {
       console.error('Error loading offerings:', err)
       setError('Failed to load subscription offerings: ' + (err instanceof Error ? err.message : JSON.stringify(err)))
@@ -60,7 +54,7 @@ export default function SubscribePage() {
       await Purchases.getSharedInstance().purchase({
         rcPackage: pkg
       })
-      router.push('/admin')
+      router.push('/host')
     } catch (purchaseError) {
       const rcError = purchaseError as PurchasesError
       console.error('RevenueCat Purchase Error (Full Object):', rcError)
@@ -84,16 +78,16 @@ export default function SubscribePage() {
   }
 
   // Find the correct offering
-  const adminOffering = offerings.find(offering => offering.identifier === "simpleplek_admin");
+  const adminOffering = offerings.find(o => o.identifier === 'simpleplek_admin')
 
-  const monthly_subscription_plan = adminOffering?.availablePackages.find(pkg => pkg.identifier === "$rc_monthly");
-  const annual_subscription_plan = adminOffering?.availablePackages.find(pkg => pkg.identifier === "$rc_annual");
-  const professional_plan = adminOffering?.availablePackages.find(pkg => pkg.identifier === "$rc_six_month");
+  const monthlyPlan      = adminOffering?.availablePackages.find(p => p.identifier === '$rc_monthly')
+  const annualPlan       = adminOffering?.availablePackages.find(p => p.identifier === '$rc_annual')
+  const professionalPlan = adminOffering?.availablePackages.find(p => p.identifier === '$rc_six_month')
   
-  console.log("Monthly Plan Found:", monthly_subscription_plan)
-  console.log("Annual Plan Found:", annual_subscription_plan)
-  console.log("Professional Plan Found:", professional_plan)
-  console.log({ monthly_subscription_plan, annual_subscription_plan, professional_plan });
+  console.log("Monthly Plan Found:", monthlyPlan)
+  console.log("Annual Plan Found:", annualPlan)
+  console.log("Professional Plan Found:", professionalPlan)
+  console.log({ monthlyPlan, annualPlan, professionalPlan });
 
   if (!isInitialized) {
     return <div>Please log in</div>;
@@ -110,16 +104,16 @@ export default function SubscribePage() {
         </div>
       )}
       <div className="mx-auto max-w-2xl text-center mb-12 sm:mb-16">
-        <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">Stay at one of our self built cabins</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">Stay at our self built cabins</h1>
         <p className="mt-4 text-lg leading-8 text-muted-foreground">
-        Become a member to see the calendar</p>
+        Become a a member to access the calendar</p>
       </div>
 
       <div className="mx-auto max-w-4xl grid grid-cols-1 gap-8 md:grid-cols-2 items-start">
-        {monthly_subscription_plan && (() => {
-          const product = monthly_subscription_plan.webBillingProduct
+        {monthlyPlan && (() => {
+          const product = monthlyPlan.webBillingProduct
           return (
-            <div key={monthly_subscription_plan.identifier} className="rounded-2xl border border-border p-8 shadow-sm">
+            <div key={monthlyPlan.identifier} className="rounded-2xl border border-border p-8 shadow-sm">
               <h2 className="text-lg font-semibold leading-8 text-foreground">{product.displayName}</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{product.description || 'Access all standard features.'}</p>
               <p className="mt-6 flex items-baseline gap-x-1">
@@ -132,7 +126,7 @@ export default function SubscribePage() {
                 <li className="flex gap-x-3">Invite guests</li>
               </ul>
               <button
-                onClick={() => handlePurchase(monthly_subscription_plan)}
+                onClick={() => handlePurchase(monthlyPlan)}
                 className="mt-8 block w-full rounded-md bg-secondary px-3.5 py-2.5 text-center text-sm font-semibold text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
                 Pay way later
@@ -141,10 +135,10 @@ export default function SubscribePage() {
           )
         })()}
 
-        {annual_subscription_plan && (() => {
-          const product = annual_subscription_plan.webBillingProduct
+        {annualPlan && (() => {
+          const product = annualPlan.webBillingProduct
           return (
-            <div key={annual_subscription_plan.identifier} className="relative rounded-2xl border border-primary p-8 shadow-lg">
+            <div key={annualPlan.identifier} className="relative rounded-2xl border border-primary p-8 shadow-lg">
               <div className="absolute top-0 -translate-y-1/2 transform rounded-full bg-primary px-3 py-1 text-xs font-semibold tracking-wide text-primary-foreground">
                 Most popular
               </div>
@@ -161,7 +155,7 @@ export default function SubscribePage() {
                 <li className="flex gap-x-3">Welcome meeting</li>
               </ul>
               <button
-                onClick={() => handlePurchase(annual_subscription_plan)}
+                onClick={() => handlePurchase(annualPlan)}
                 className="mt-8 block w-full rounded-md bg-primary px-3.5 py-2.5 text-center text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
                 Book Now - Save
@@ -171,8 +165,8 @@ export default function SubscribePage() {
         })()}
       </div>
 
-      {professional_plan && (() => {
-        const product = professional_plan.webBillingProduct;
+      {professionalPlan && (() => {
+        const product = professionalPlan.webBillingProduct;
         return (
           <div 
             className="mt-16 pt-16 pb-16 md:border-t border-border bg-cover bg-center relative rounded-lg shadow-md"
@@ -201,7 +195,7 @@ export default function SubscribePage() {
                     <li className="flex gap-x-3">Estimates for guests</li>
                   </ul>
                   <button
-                    onClick={() => handlePurchase(professional_plan)}
+                    onClick={() => handlePurchase(professionalPlan)}
                     className="mt-8 block w-full rounded-md bg-secondary px-3.5 py-2.5 text-center text-sm font-semibold text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                   >
                     Host a plek

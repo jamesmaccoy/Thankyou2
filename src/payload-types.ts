@@ -148,6 +148,8 @@ export interface UserAuthOperations {
   };
 }
 /**
+ * 📅 Manage your Plek bookings and guest reservations
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "bookings".
  */
@@ -163,6 +165,63 @@ export interface Booking {
   paymentStatus?: ('paid' | 'unpaid') | null;
   fromDate: string;
   toDate: string;
+  /**
+   * The ID of the package type (e.g., per_night, luxury_night, hosted_3nights)
+   */
+  packageType?: string | null;
+  /**
+   * Detailed information about the purchased package
+   */
+  packageDetails?: {
+    /**
+     * Human-readable name of the package
+     */
+    name?: string | null;
+    /**
+     * Description of what the package includes
+     */
+    description?: string | null;
+    /**
+     * Multiplier applied to base rate
+     */
+    multiplier?: number | null;
+    features?:
+      | {
+          feature: string;
+          id?: string | null;
+        }[]
+      | null;
+    /**
+     * RevenueCat package identifier
+     */
+    revenueCatId?: string | null;
+    category?: ('standard' | 'luxury' | 'hosted' | 'specialty') | null;
+    /**
+     * Whether this package includes hosted services
+     */
+    isHosted?: boolean | null;
+  };
+  /**
+   * Pricing details for this booking
+   */
+  pricing?: {
+    /**
+     * Base rate before package multiplier
+     */
+    baseRate?: number | null;
+    /**
+     * Rate after applying package multiplier
+     */
+    packageRate?: number | null;
+    /**
+     * Number of nights for this booking
+     */
+    totalNights?: number | null;
+    /**
+     * Final total amount for the booking
+     */
+    totalAmount?: number | null;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -173,6 +232,7 @@ export interface Booking {
 export interface User {
   id: string;
   name?: string | null;
+  role?: ('admin' | 'customer' | 'host' | 'guest')[] | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -185,11 +245,16 @@ export interface User {
   password?: string | null;
 }
 /**
+ * 🏠 Create and manage your unique Pleks - your personal spaces for guests to discover and book
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts".
  */
 export interface Post {
   id: string;
+  /**
+   * Give your Plek a memorable name that guests will love (e.g., "Cozy Mountain Retreat", "Urban Garden Oasis")
+   */
   title: string;
   heroImage?: (string | null) | Media;
   content: {
@@ -225,7 +290,78 @@ export interface Post {
         name?: string | null;
       }[]
     | null;
+  /**
+   * Base rate per night in USD
+   */
   baseRate?: number | null;
+  /**
+   * Available packages for this plek. You can select from templates or create custom packages.
+   */
+  packageTypes?:
+    | {
+        /**
+         * Select a package template from the centralized system (optional)
+         */
+        templateId?:
+          | (
+              | 'per_night'
+              | 'luxury_night'
+              | 'three_nights'
+              | 'hosted_3nights'
+              | 'weekly'
+              | 'hosted_weekly'
+              | 'monthly'
+              | 'wine_package'
+            )
+          | null;
+        /**
+         * Package name (will be auto-filled if using a template)
+         */
+        name: string;
+        /**
+         * Package description (will be auto-filled if using a template)
+         */
+        description?: string | null;
+        /**
+         * Price for this package (can override template pricing)
+         */
+        price: number;
+        /**
+         * Price multiplier applied to base rate
+         */
+        multiplier: number;
+        /**
+         * Package features (will be auto-filled if using a template)
+         */
+        features?:
+          | {
+              feature?: string | null;
+              id?: string | null;
+            }[]
+          | null;
+        /**
+         * RevenueCat package identifier (will be auto-filled if using a template)
+         */
+        revenueCatId?: string | null;
+        /**
+         * Package category for organization
+         */
+        category?: ('standard' | 'luxury' | 'hosted' | 'specialty') | null;
+        /**
+         * Minimum number of nights for this package
+         */
+        minNights?: number | null;
+        /**
+         * Maximum number of nights for this package
+         */
+        maxNights?: number | null;
+        /**
+         * Whether this package includes hosted services
+         */
+        isHosted?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
   slug?: string | null;
   slugLock?: boolean | null;
   updatedAt: string;
@@ -238,6 +374,7 @@ export interface Post {
  */
 export interface Media {
   id: string;
+  owner?: (string | null) | User;
   alt?: string | null;
   caption?: {
     root: {
@@ -346,6 +483,8 @@ export interface Category {
   createdAt: string;
 }
 /**
+ * 💰 Review pricing estimates and booking inquiries for your Pleks
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "estimates".
  */
@@ -373,6 +512,7 @@ export interface Estimate {
 export interface Page {
   id: string;
   title: string;
+  owner?: (string | null) | User;
   hero: {
     type: 'none' | 'highImpact' | 'mediumImpact' | 'lowImpact';
     richText?: {
@@ -1068,6 +1208,31 @@ export interface BookingsSelect<T extends boolean = true> {
   paymentStatus?: T;
   fromDate?: T;
   toDate?: T;
+  packageType?: T;
+  packageDetails?:
+    | T
+    | {
+        name?: T;
+        description?: T;
+        multiplier?: T;
+        features?:
+          | T
+          | {
+              feature?: T;
+              id?: T;
+            };
+        revenueCatId?: T;
+        category?: T;
+        isHosted?: T;
+      };
+  pricing?:
+    | T
+    | {
+        baseRate?: T;
+        packageRate?: T;
+        totalNights?: T;
+        totalAmount?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1097,6 +1262,7 @@ export interface EstimatesSelect<T extends boolean = true> {
  */
 export interface PagesSelect<T extends boolean = true> {
   title?: T;
+  owner?: T;
   hero?:
     | T
     | {
@@ -1252,6 +1418,27 @@ export interface PostsSelect<T extends boolean = true> {
         name?: T;
       };
   baseRate?: T;
+  packageTypes?:
+    | T
+    | {
+        templateId?: T;
+        name?: T;
+        description?: T;
+        price?: T;
+        multiplier?: T;
+        features?:
+          | T
+          | {
+              feature?: T;
+              id?: T;
+            };
+        revenueCatId?: T;
+        category?: T;
+        minNights?: T;
+        maxNights?: T;
+        isHosted?: T;
+        id?: T;
+      };
   slug?: T;
   slugLock?: T;
   updatedAt?: T;
@@ -1263,6 +1450,7 @@ export interface PostsSelect<T extends boolean = true> {
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
+  owner?: T;
   alt?: T;
   caption?: T;
   updatedAt?: T;
@@ -1377,6 +1565,7 @@ export interface CategoriesSelect<T extends boolean = true> {
  */
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
+  role?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

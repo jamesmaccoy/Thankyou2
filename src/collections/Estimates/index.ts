@@ -1,9 +1,9 @@
-import { adminOrSelfField } from '@/access/adminOrSelfField'
-import { isAdmin } from '@/access/isAdmin'
-import { isAdminField } from '@/access/isAdminField'
+import { hostOrSelfField } from '@/access/adminOrSelfField'
+import { isHost } from '@/access/isAdmin'
+import { isHostField } from '@/access/isAdminField'
 import { slugField } from '@/fields/slug'
 import type { CollectionConfig } from 'payload'
-import { adminOrSelfOrGuests } from '../Bookings/access/adminOrSelfOrGuests'
+import { hostOrSelfOrGuests } from '../Bookings/access/adminOrSelfOrGuests'
 import { generateJwtToken, verifyJwtToken } from '@/utilities/token'
 
 export const Estimate: CollectionConfig = {
@@ -16,8 +16,15 @@ export const Estimate: CollectionConfig = {
     interface: 'Estimate',
   },
   admin: {
-    useAsTitle: 'id',
-    defaultColumns: ['customer', 'post', 'fromDate', 'toDate', 'guests'],
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('admin') && !roles.includes('host')
+    },
+    group: 'Plek Manager',
+    description: '💰 Review pricing estimates and booking inquiries for your Pleks',
+    defaultColumns: ['customer', 'plek', 'startDate', 'endDate', 'totalCost', 'createdAt'],
+    useAsTitle: 'customer',
   },
   endpoints: [
     // This endpoint is used to generate a token for the estimate
@@ -220,35 +227,50 @@ export const Estimate: CollectionConfig = {
     },
   ],
   access: {
-    // create: ({ req: { user } }) => {
-    //   if (!user) return false
-    //   const roles = (user as any).role || []
-    //   return roles.includes('admin') || roles.includes('customer')
-    // },
-    // read: ({ req: { user } }) => {
-    //   if (!user) return false
-    //   if ((user as any).role?.includes('admin')) return true
-    //   if ((user as any).role?.includes('customer')) {
-    //     return { customer: { equals: user.id } }
-    //   }
-    //   return false
-    // },
-    // update: ({ req: { user } }) => {
-    //   if (!user) return false
-    //   if ((user as any).role?.includes('admin')) return true
-    //   if ((user as any).role?.includes('customer')) {
-    //     return { customer: { equals: user.id } }
-    //   }
-    //   return false
-    // },
-    // delete: ({ req: { user } }) => {
-    //   if (!user) return false
-    //   if ((user as any).role?.includes('admin')) return true
-    //   if ((user as any).role?.includes('customer')) {
-    //     return { customer: { equals: user.id } }
-    //   }
-    //   return false
-    // },
+    create: ({ req: { user } }) => {
+      if (!user) return false
+      const roles = user.role || []
+      // Only hosts and customers can create estimates, guests cannot
+      return roles.includes('host') || roles.includes('customer')
+    },
+    read: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('host')) return true
+      
+      // Build conditions for customers and guests
+      const conditions: any[] = []
+      
+      if (user.role?.includes('customer')) {
+        conditions.push({ customer: { equals: user.id } })
+      }
+      
+      if (user.role?.includes('guest')) {
+        conditions.push({ guests: { contains: user.id } })
+      }
+      
+      if (conditions.length === 0) return false
+      if (conditions.length === 1) return conditions[0]
+      
+      return { or: conditions }
+    },
+    update: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('host')) return true
+      if (user.role?.includes('customer')) {
+        return { customer: { equals: user.id } }
+      }
+      // Guests cannot update estimates
+      return false
+    },
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('host')) return true
+      if (user.role?.includes('customer')) {
+        return { customer: { equals: user.id } }
+      }
+      // Guests cannot delete estimates
+      return false
+    },
   },
   fields: [
     {
@@ -257,7 +279,7 @@ export const Estimate: CollectionConfig = {
       type: 'text',
       required: true,
       access: {
-        update: isAdminField,
+        update: isHostField,
       },
     },
     {
@@ -266,7 +288,7 @@ export const Estimate: CollectionConfig = {
       relationTo: 'users',
       required: true,
       access: {
-        update: isAdminField,
+        update: isHostField,
       },
     },
     {
@@ -285,7 +307,7 @@ export const Estimate: CollectionConfig = {
       hasMany: true,
       relationTo: 'users',
       access: {
-        update: adminOrSelfField('customer'),
+        update: hostOrSelfField('customer'),
       },
       admin: {
         isSortable: true,
@@ -296,18 +318,18 @@ export const Estimate: CollectionConfig = {
       type: 'number',
       required: true,
       access: {
-        update: isAdminField,
+        update: isHostField,
       },
     },
     ...slugField('title', {
       checkboxOverrides: {
         access: {
-          update: isAdminField,
+          update: isHostField,
         },
       },
       slugOverrides: {
         access: {
-          update: isAdminField,
+          update: isHostField,
         },
       },
     }),
@@ -317,7 +339,7 @@ export const Estimate: CollectionConfig = {
       type: 'relationship',
       required: true,
       access: {
-        update: isAdminField,
+        update: isHostField,
       },
     },
     {
@@ -338,7 +360,7 @@ export const Estimate: CollectionConfig = {
         },
       ],
       access: {
-        update: isAdminField,
+        update: isHostField,
       },
     },
     {
@@ -354,7 +376,7 @@ export const Estimate: CollectionConfig = {
         },
       },
       access: {
-        update: isAdminField,
+        update: isHostField,
       },
     },
     {
@@ -369,7 +391,7 @@ export const Estimate: CollectionConfig = {
         },
       },
       access: {
-        update: isAdminField,
+        update: isHostField,
       },
     },
     {
@@ -395,4 +417,4 @@ export const Estimate: CollectionConfig = {
       },
     ],
   },
-}
+} 

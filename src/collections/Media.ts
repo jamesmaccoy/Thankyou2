@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url'
 
 import { anyone } from '../access/anyone'
 import { authenticated } from '../access/authenticated'
+import { hostOrCustomer } from '../access/adminOrCustomer'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -17,12 +18,74 @@ const dirname = path.dirname(filename)
 export const Media: CollectionConfig = {
   slug: 'media',
   access: {
-    create: authenticated,
-    delete: authenticated,
-    read: anyone,
-    update: authenticated,
+    create: hostOrCustomer,
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('host')) return true
+      if (user.role?.includes('customer')) {
+        return {
+          owner: {
+            equals: user.id,
+          },
+        }
+      }
+      return false
+    },
+    read: ({ req: { user } }) => {
+      if (!user) return true // Anyone can view media
+      if (user.role?.includes('host')) return true
+      if (user.role?.includes('customer')) {
+        return {
+          owner: {
+            equals: user.id,
+          },
+        }
+      }
+      return true // Guests can view all media
+    },
+    update: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('host')) return true
+      if (user.role?.includes('customer')) {
+        return {
+          owner: {
+            equals: user.id,
+          },
+        }
+      }
+      return false
+    },
+  },
+  admin: {
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('host') && !roles.includes('customer')
+    },
   },
   fields: [
+    {
+      name: 'owner',
+      type: 'relationship',
+      relationTo: 'users',
+      admin: {
+        position: 'sidebar',
+        condition: (data, siblingData, { user }) => {
+          return Boolean(user?.role?.includes('host'))
+        },
+      },
+      defaultValue: ({ user }) => user?.id,
+      hooks: {
+        beforeChange: [
+          ({ req, value }) => {
+            if (!value && req.user) {
+              return req.user.id
+            }
+            return value
+          },
+        ],
+      },
+    },
     {
       name: 'alt',
       type: 'text',

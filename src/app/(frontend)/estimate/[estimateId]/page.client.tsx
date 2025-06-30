@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from "react"
 import { Estimate, User } from '@/payload-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,14 +9,7 @@ import { Purchases, type Package, ErrorCode, type Product } from '@revenuecat/pu
 import { useRouter } from 'next/navigation'
 import { FileText, Loader2 } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import InviteUrlDialog from './_components/invite-url-dialog'
@@ -26,17 +19,32 @@ import { UserIcon } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { DateRange } from 'react-day-picker'
-import Link from 'next/link'
-import { format } from 'date-fns'
+import React from 'react'
+import { getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { Badge } from '@/components/ui/badge'
+
+// Enhanced interface for package details with filtering capabilities
+interface EnhancedPackageDetails {
+  id: string
+  title: string
+  description: string
+  multiplier: number
+  features: string[]
+  revenueCatId: string
+  price: number
+  minNights: number
+  maxNights: number
+  availableSeasons: string[]
+}
 
 interface RevenueCatError extends Error {
-  code?: ErrorCode
+  code?: ErrorCode;
 }
 
 interface RevenueCatProduct extends Product {
-  price?: number
-  priceString?: string
-  currencyCode?: string
+  price?: number;
+  priceString?: string;
+  currencyCode?: string;
 }
 
 type Props = {
@@ -49,29 +57,47 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const { isInitialized } = useRevenueCat()
 
   // Use estimate data for totals and duration
-  // const bookingTotal = data?.total ?? 'N/A' // REMOVE, not in Estimate type
-  // const bookingDuration = data?.duration ?? (
-  //   data?.fromDate && data?.toDate
-  //     ? Math.max(1, Math.round((new Date(data.toDate).getTime() - new Date(data.fromDate).getTime()) / (1000 * 60 * 60 * 24)))
-  //     : 'N/A'
-  // )
-  // Instead, calculate duration and use a fallback for total
-  const _bookingDuration =
-    data?.fromDate && data?.toDate
-      ? Math.max(
-          1,
-          Math.round(
-            (new Date(data.toDate).getTime() - new Date(data.fromDate).getTime()) /
-              (1000 * 60 * 60 * 24),
-          ),
-        )
-      : 1
-  const _bookingTotal = data?.total ?? 0
-  const _postId = typeof data?.post === 'object' && data?.post?.id ? data.post.id : ''
+  const _bookingDuration = data?.fromDate && data?.toDate
+    ? Math.max(1, Math.round((new Date(data.toDate).getTime() - new Date(data.fromDate).getTime()) / (1000 * 60 * 60 * 24)))
+    : 1;
+  const _bookingTotal = data?.total ?? 0;
+  const _postId = typeof data?.post === 'object' && data?.post?.id ? data.post.id : (typeof data?.post === 'string' ? data.post : '')
+  const _post = typeof data?.post === 'object' ? data.post : null
 
-  const [guests, setGuests] = useState<User[]>(
-    Array.isArray(data.guests) ? (data.guests.filter((g) => typeof g !== 'string') as User[]) : [],
-  )
+  // State for post data if we need to fetch it
+  const [postData, setPostData] = useState<any>(null)
+  const [loadingPost, setLoadingPost] = useState(false)
+
+  // Fetch post data if it's not populated in the estimate
+  useEffect(() => {
+    const fetchPostData = async () => {
+      if (!_post && _postId) {
+        setLoadingPost(true)
+        try {
+          const response = await fetch(`/api/posts/${_postId}`)
+          if (response.ok) {
+            const result = await response.json()
+            const post = result.doc // API returns { doc: post }
+            setPostData(post)
+            console.log('Fetched post data:', post)
+          } else {
+            console.error('Failed to fetch post data:', response.status)
+          }
+        } catch (error) {
+          console.error('Error fetching post data:', error)
+        } finally {
+          setLoadingPost(false)
+        }
+      }
+    }
+
+    fetchPostData()
+  }, [_post, _postId])
+
+  // Use either the populated post or the fetched post data
+  const effectivePost = _post || postData
+
+  const [guests, setGuests] = useState<User[]>(Array.isArray(data.guests) ? data.guests.filter(g => typeof g !== 'string') as User[] : [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -83,14 +109,9 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const [paymentSuccess, setPaymentSuccess] = useState(false)
 
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null)
-  const [selectedDuration, setSelectedDuration] = useState<number>(
-    typeof _bookingDuration === 'number' ? _bookingDuration : 1,
-  )
+  const [selectedDuration, setSelectedDuration] = useState<number>(typeof _bookingDuration === 'number' ? _bookingDuration : 1)
   const [isWineSelected, setIsWineSelected] = useState(false)
   const [packagePrice, setPackagePrice] = useState<number | null>(null)
-
-  const [areDatesAvailable, setAreDatesAvailable] = useState(true)
-  const [availabilityError, setAvailabilityError] = useState('')
 
   // Add state for date range selection
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -98,237 +119,148 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     to: data?.toDate ? new Date(data.toDate) : undefined,
   })
 
-  const checkAvailability = useCallback(
-    async (fromDate: string, toDate: string) => {
-      const postId = typeof data.post === 'string' ? data.post : data.post?.id
-
-      const response = await fetch(
-        `/api/bookings/check-availability?postId=${postId}&startDate=${fromDate}&endDate=${toDate}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      )
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        setAvailabilityError(result.message || 'Failed to check availability')
-        return
-      }
-
-      setAreDatesAvailable(!!result.isAvailable)
-    },
-    [data],
-  )
-
-  useEffect(() => {
-    checkAvailability(
-      format(new Date(data.fromDate), 'yyyy-MM-dd'),
-      format(new Date(data.toDate), 'yyyy-MM-dd'),
+  // Filter packages based on duration and season
+  const getFilteredPackages = (): Record<string, EnhancedPackageDetails> => {
+    const allPackages = getPackageDetails()
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth() + 1 // 1-12
+    
+    // Determine current season (simple logic - can be enhanced)
+    const getCurrentSeason = () => {
+      if (currentMonth >= 12 || currentMonth <= 2) return 'winter'
+      if (currentMonth >= 3 && currentMonth <= 5) return 'spring'
+      if (currentMonth >= 6 && currentMonth <= 8) return 'summer'
+      return 'autumn'
+    }
+    
+    const currentSeason = getCurrentSeason()
+    
+    return Object.fromEntries(
+      Object.entries(allPackages).filter(([key, pkg]) => {
+        // Type assertion for pkg
+        const packageInfo = pkg as EnhancedPackageDetails
+        
+        // Filter by duration
+        const withinDuration = selectedDuration >= packageInfo.minNights && selectedDuration <= packageInfo.maxNights
+        
+        // Filter by season (if package has season restrictions)
+        const seasonMatch = packageInfo.availableSeasons.includes('all') || 
+                           packageInfo.availableSeasons.includes(currentSeason)
+        
+        return withinDuration && seasonMatch
+      })
     )
-  }, [checkAvailability, data])
-
-  // Define package tiers with their thresholds and multipliers
-  const packageTiers = [
-    {
-      id: 'per_night',
-      title: 'Per Night',
-      description: 'Standard nightly rate',
-      minNights: 1,
-      maxNights: 1,
-      multiplier: 1.0,
-      features: ['Standard accommodation', 'Basic amenities', 'Self-service'],
-    },
-    {
-      id: 'three_nights',
-      title: '3 Night Package',
-      description: 'Special rate for 3+ nights',
-      minNights: 2,
-      maxNights: 3,
-      multiplier: 0.9,
-      features: [
-        'Standard accommodation',
-        'Basic amenities',
-        'Self-service',
-        '10% discount on total',
-      ],
-    },
-    {
-      id: 'Weekly',
-      title: 'Weekly Package',
-      description: 'Best value for week-long stays',
-      minNights: 4,
-      maxNights: 7,
-      multiplier: 0.8,
-      features: [
-        'Standard accommodation',
-        'Basic amenities',
-        'Self-service',
-        '20% discount on total',
-      ],
-    },
-    {
-      id: '2Xweekly',
-      title: '2X Weekly Package',
-      description: 'Extended stay special rate',
-      minNights: 8,
-      maxNights: 13,
-      multiplier: 0.7,
-      features: [
-        'Standard accommodation',
-        'Basic amenities',
-        'Self-service',
-        '30% discount on total',
-        'Extended stay benefits',
-      ],
-    },
-    {
-      id: 'weekX3',
-      title: '3 Week Package',
-      description: 'Long-term stay special rate',
-      minNights: 14,
-      maxNights: 28,
-      multiplier: 0.5,
-      features: [
-        'Standard accommodation',
-        'Basic amenities',
-        'Self-service',
-        '50% discount on total',
-        'Extended stay benefits',
-        'Priority booking for future stays',
-      ],
-    },
-    {
-      id: 'monthly',
-      title: 'Monthly Package',
-      description: 'Extended stay rate',
-      minNights: 29,
-      maxNights: 365,
-      multiplier: 0.7,
-      features: [
-        'Standard accommodation',
-        'Basic amenities',
-        'Self-service',
-        '30% discount on total',
-      ],
-    },
-  ]
-
-  // Create packageDetails from packageTiers
-  const packageDetails = {
-    per_night: {
-      ...packageTiers[0],
-      revenueCatId: 'pn',
-    },
-    per_night_luxury: {
-      ...packageTiers[0],
-      title: 'Luxury Night',
-      description: 'Premium nightly rate',
-      multiplier: 1.5,
-      features: ['Premium accommodation', 'Enhanced amenities', 'Priority service'],
-      revenueCatId: 'per_night_luxury',
-    },
-    three_nights: {
-      ...packageTiers[1],
-      revenueCatId: '3nights',
-    },
-    hosted3nights: {
-      ...packageTiers[1],
-      title: 'Hosted 3 Nights',
-      description: 'Premium 3-night experience',
-      multiplier: 1.4,
-      features: [
-        'Premium accommodation',
-        'Dedicated host',
-        'Enhanced amenities',
-        'Priority service',
-      ],
-      revenueCatId: 'hosted3nights',
-    },
-    Weekly: {
-      ...packageTiers[2],
-      revenueCatId: 'Weekly',
-    },
-    hosted7nights: {
-      ...packageTiers[2],
-      title: 'Hosted Weekly',
-      description: 'Premium week-long experience',
-      multiplier: 1.3,
-      features: [
-        'Premium accommodation',
-        'Dedicated host',
-        'Enhanced amenities',
-        'Priority service',
-        '15% discount on total',
-      ],
-      revenueCatId: 'hosted7nights',
-    },
-    '2Xweekly': {
-      ...packageTiers[3],
-      revenueCatId: '2Xweekly',
-    },
-    weekX3: {
-      ...packageTiers[4],
-      revenueCatId: 'weekX3',
-    },
-    monthly: {
-      ...packageTiers[5],
-      revenueCatId: 'monthly',
-    },
-    wine: {
-      title: 'Wine Package',
-      description: 'Includes wine tasting and selection platters',
-      multiplier: 1.5,
-      minNights: 1,
-      maxNights: 365,
-      features: [
-        'Standard accommodation',
-        'Wine tasting experience',
-        'Curated wine selection',
-        'Sommelier consultation',
-      ],
-      revenueCatId: 'Bottle_wine',
-    },
   }
 
-  // Determine package based on duration and wine selection
-  useEffect(() => {
-    if (!_bookingDuration) return
-
-    const duration = Number(_bookingDuration)
-    let packageId = 'per_night'
-
-    // If wine package is selected, use the corresponding luxury package
-    if (isWineSelected) {
-      if (duration >= 29) {
-        packageId = 'monthly'
-      } else if (duration >= 14) {
-        packageId = 'hosted7nights'
-      } else if (duration >= 3) {
-        packageId = 'hosted3nights'
-      } else {
-        packageId = 'per_night_luxury'
-      }
-    } else {
-      // Find the appropriate package tier based on duration
-      const selectedTier = packageTiers.find(
-        (tier) => duration >= tier.minNights && duration <= tier.maxNights,
-      )
-
-      if (selectedTier) {
-        packageId = selectedTier.id
-      } else {
-        // Fallback to per night if no tier matches
-        packageId = 'per_night'
+  // Get packages from the centralized system with proper post integration
+  const getPackageDetails = (): Record<string, EnhancedPackageDetails> => {
+    console.log('=== PACKAGE DETAILS DEBUG ===')
+    console.log('effectivePost:', effectivePost)
+    console.log('effectivePost?.baseRate:', effectivePost?.baseRate)
+    console.log('effectivePost?.packageTypes:', effectivePost?.packageTypes)
+    
+    // Get the post's base rate as fallback
+    const postBaseRate = effectivePost?.baseRate || 150
+    console.log('Using postBaseRate:', postBaseRate)
+    
+    // FIRST PRIORITY: Use post-specific packageTypes if they exist
+    if (effectivePost?.packageTypes && Array.isArray(effectivePost.packageTypes) && effectivePost.packageTypes.length > 0) {
+      const postPackages: Record<string, EnhancedPackageDetails> = {}
+      effectivePost.packageTypes.forEach((pkg: any) => {
+        const packageKey = pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_')
+        const packagePrice = pkg.price || postBaseRate
+        console.log(`Package "${pkg.name}": price=${pkg.price}, using=${packagePrice}, baseRate=${postBaseRate}`)
+        
+        postPackages[packageKey] = {
+          id: packageKey,
+          title: pkg.name,
+          description: pkg.description || '',
+          multiplier: pkg.multiplier || 1,
+          features: Array.isArray(pkg.features) 
+            ? pkg.features.map((f: any) => typeof f === 'string' ? f : f.feature || '').filter((f: string) => f.trim())
+            : [],
+          revenueCatId: pkg.revenueCatId || packageKey,
+          price: packagePrice, // Use package price if available, otherwise post baseRate
+          minNights: pkg.minNights || 1,
+          maxNights: pkg.maxNights || 365,
+          availableSeasons: ['all'], // Default to all seasons
+        }
+      })
+      console.log('Final post-specific packages:', postPackages)
+      console.log('=== END PACKAGE DEBUG ===')
+      return postPackages
+    }
+    
+    // SECOND PRIORITY: Fallback to centralized packages if no post-specific packages
+    const centralizedPackages = getAllPackageTypes()
+    if (centralizedPackages && Object.keys(centralizedPackages).length > 0) {
+      const packageDetails: Record<string, EnhancedPackageDetails> = {}
+      Object.entries(centralizedPackages).forEach(([key, pkg]) => {
+        packageDetails[key] = {
+          id: key,
+          title: pkg.name,
+          description: pkg.description,
+          multiplier: pkg.multiplier,
+          features: pkg.features,
+          revenueCatId: pkg.revenueCatId,
+          price: postBaseRate, // Use the post's base rate for centralized packages
+          minNights: pkg.minNights || 1,
+          maxNights: pkg.maxNights || 365,
+          availableSeasons: ['all'], // Default to all seasons for now
+        }
+      })
+      console.log('Using centralized packages with baseRate fallback:', packageDetails)
+      console.log('=== END PACKAGE DEBUG ===')
+      return packageDetails
+    }
+    
+    // FINAL FALLBACK: Default packages if nothing else is available
+    const defaultPackages: Record<string, EnhancedPackageDetails> = {
+      per_night: {
+        id: "per_night",
+        title: "Per Night",
+        description: "Standard nightly rate",
+        multiplier: 1.0,
+        features: [
+          "Standard accommodation",
+          "Basic amenities",
+          "Self-service"
+        ],
+        revenueCatId: "per_night",
+        price: postBaseRate,
+        minNights: 1,
+        maxNights: 365,
+        availableSeasons: ['all'],
       }
     }
+    console.log('Using default packages with baseRate fallback:', defaultPackages)
+    console.log('=== END PACKAGE DEBUG ===')
+    return defaultPackages
+  }
 
-    setSelectedPackage(packageId)
-    setSelectedDuration(duration)
-  }, [_bookingDuration, isWineSelected])
+  const packageDetails = getFilteredPackages()
+
+  // Add helper text for filtered packages
+  const getPackageFilterInfo = () => {
+    const allPackages = getPackageDetails()
+    const filteredPackages = getFilteredPackages()
+    const totalPackages = Object.keys(allPackages).length
+    const availablePackages = Object.keys(filteredPackages).length
+    
+    if (totalPackages === availablePackages) {
+      return null // No filtering applied
+    }
+    
+    return `Showing ${availablePackages} of ${totalPackages} packages available for ${selectedDuration} night${selectedDuration !== 1 ? 's' : ''}`
+  }
+
+  // Set initial selected package to the first available package
+  React.useEffect(() => {
+    if (!selectedPackage && Object.keys(packageDetails).length > 0) {
+      const firstPackageKey = Object.keys(packageDetails)[0]
+      setSelectedPackage(firstPackageKey || null)
+    }
+  }, [selectedPackage, packageDetails])
 
   // Load RevenueCat offerings when initialized
   useEffect(() => {
@@ -338,147 +270,273 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   }, [isInitialized])
 
   const loadOfferings = async () => {
-    setLoadingOfferings(true)
     try {
-      const fetchedOfferings = await Purchases.getSharedInstance().getOfferings()
-      console.log('Offerings:', fetchedOfferings)
-      const perNightOffering = fetchedOfferings.all['per_night']
-      if (perNightOffering && perNightOffering.availablePackages.length > 0) {
-        setOfferings(perNightOffering.availablePackages)
-      } else {
+      setLoadingOfferings(true)
+      
+      // Add better error handling for RevenueCat
+      if (!isInitialized) {
+        console.warn('RevenueCat not initialized, skipping offerings load')
         setOfferings([])
+        return
       }
-    } catch (err) {
-      setPaymentError('Failed to load booking options')
+
+      // Add delay to prevent rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const offerings = await Purchases.getSharedInstance().getOfferings()
+      
+      if (!offerings || !offerings.all) {
+        console.warn('No offerings available from RevenueCat')
+        setOfferings([])
+        return
+      }
+      
+      const packages = Object.values(offerings.all).flatMap(offering => 
+        offering.availablePackages || []
+      )
+      
+      setOfferings(packages)
+      console.log('Loaded RevenueCat packages:', packages.length)
+    } catch (error: any) {
+      console.error('Error loading offerings:', error)
+      
+      // Handle specific RevenueCat errors
+      if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+        console.warn('RevenueCat rate limit reached, using fallback pricing')
+        setPaymentError('Loading packages... Please wait a moment and refresh if needed.')
+      } else if (error.message?.includes('network') || error.message?.includes('Network')) {
+        console.warn('Network error loading RevenueCat offerings')
+        setPaymentError('Network issue loading payment options. Pricing will use defaults.')
+      }
+      
+      // Always continue with empty offerings to allow fallback pricing
+      setOfferings([])
     } finally {
       setLoadingOfferings(false)
     }
   }
 
+  const handlePackageSelect = (packageId: string) => {
+    setSelectedPackage(packageId)
+    const selectedPkg = packageDetails[packageId]
+    if (selectedPkg) {
+      // Use the package's price (which is either the package's custom price or post's baseRate)
+      const calculatedPrice = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+      setPackagePrice(calculatedPrice)
+      console.log('Package selection pricing:', { 
+        packagePrice: selectedPkg.price, 
+        multiplier: selectedPkg.multiplier, 
+        duration: selectedDuration, 
+        total: calculatedPrice 
+      })
+    }
+  }
+
+  const handleFeatureClick = (feature: string, index: number) => {
+    console.log(`Feature clicked: ${feature} at index ${index}`)
+  }
+
   // Update package price when package or duration changes
   useEffect(() => {
-    if (!selectedPackage || !offerings.length) return
+    if (!selectedPackage) return
 
-    const selectedPackageDetails = packageDetails[selectedPackage]
+    const selectedPackageDetails = packageDetails[selectedPackage as keyof typeof packageDetails]
     if (!selectedPackageDetails) return
 
-    const packageToUse = offerings.find(
-      (pkg) => pkg.webBillingProduct?.identifier === selectedPackageDetails.revenueCatId,
-    )
+    // If we have RevenueCat offerings, try to use them for pricing
+    let estimatePackage = null
+    if (offerings.length > 0) {
+      estimatePackage = offerings.find(pkg => {
+        const identifier = pkg.webBillingProduct?.identifier;
+        return identifier === selectedPackageDetails.revenueCatId;
+      });
+    }
 
-    if (packageToUse?.webBillingProduct) {
-      const product = packageToUse.webBillingProduct as RevenueCatProduct
+    if (estimatePackage && estimatePackage.webBillingProduct) {
+      const product = estimatePackage.webBillingProduct as RevenueCatProduct
       if (product.price) {
         const basePrice = Number(product.price)
-        const multiplier = selectedPackageDetails.multiplier
-        const calculatedPrice = basePrice * multiplier
+        const multiplier = selectedPackageDetails.multiplier ?? 1.0
+        const calculatedPrice = basePrice * multiplier * selectedDuration
         setPackagePrice(calculatedPrice)
-      } else {
-        const basePrice = Number(_bookingTotal)
-        const multiplier = selectedPackageDetails.multiplier
-        const calculatedPrice = basePrice * multiplier
-        setPackagePrice(calculatedPrice)
+        console.log('Using RevenueCat pricing:', { basePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
+        return
       }
-    } else {
-      const basePrice = Number(_bookingTotal)
-      const multiplier = selectedPackageDetails.multiplier
-      const calculatedPrice = basePrice * multiplier
-      setPackagePrice(calculatedPrice)
     }
-  }, [selectedPackage, offerings, _bookingTotal])
+
+    // Fallback to local pricing calculation using package price
+    const packagePrice = selectedPackageDetails.price
+    const multiplier = selectedPackageDetails.multiplier ?? 1.0
+    const calculatedPrice = packagePrice * multiplier * selectedDuration
+    setPackagePrice(calculatedPrice)
+    console.log('Using package pricing:', { packagePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
+  }, [selectedPackage, offerings, selectedDuration, packageDetails, effectivePost?.baseRate])
 
   const calculateTotalPrice = () => {
-    if (!packagePrice || !selectedDuration) return null
-    return packagePrice * selectedDuration
+    // Calculate package price directly from selected package details
+    let packageTotal = 0
+    if (selectedPackage && packageDetails[selectedPackage]) {
+      const selectedPkg = packageDetails[selectedPackage]
+      packageTotal = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+    }
+    
+    // Calculate wine package price if selected
+    const winePrice = isWineSelected && packageDetails.wine_package 
+      ? (packageDetails.wine_package.price * packageDetails.wine_package.multiplier * selectedDuration)
+      : 0
+      
+    const total = packageTotal + winePrice
+    console.log('calculateTotalPrice:', { 
+      selectedPackage, 
+      packageTotal, 
+      winePrice, 
+      total,
+      selectedDuration,
+      packageDetails: selectedPackage ? packageDetails[selectedPackage] : null
+    })
+    
+    return total
   }
 
   const formatPrice = (price: number | null) => {
-    if (price === null) return 'N/A'
+    if (price === null || price === undefined) return "N/A"
     return `R${price.toFixed(2)}`
   }
 
   const handleEstimate = async () => {
-    if (!areDatesAvailable) return
-
     setPaymentLoading(true)
     setPaymentError(null)
-
     try {
-      const selectedPackageDetails = selectedPackage ? packageDetails[selectedPackage] : null
+      const selectedPackageDetails = selectedPackage ? packageDetails[selectedPackage as keyof typeof packageDetails] : null
       if (!selectedPackageDetails) {
-        throw new Error('No package selected')
-      }
-      const estimatePackage = offerings.find((pkg) => {
-        const identifier = pkg.webBillingProduct?.identifier
-        return identifier === selectedPackageDetails.revenueCatId
-      })
-      if (!estimatePackage) {
-        throw new Error(
-          `Estimate package not found for ${selectedPackageDetails.revenueCatId}. Please contact support.`,
-        )
+        throw new Error("No package selected")
       }
 
-      // --- RevenueCat Payment Flow (mirroring booking) ---
-      try {
-        const purchaseResult = await Purchases.getSharedInstance().purchase({
-          rcPackage: estimatePackage,
+      // Calculate final total including wine package if selected
+      const finalTotal = calculateTotalPrice()
+      console.log('Final estimate total:', finalTotal)
+
+      // Try to find RevenueCat package if offerings are available
+      let estimatePackage = null
+      if (offerings.length > 0) {
+        estimatePackage = offerings.find(pkg => {
+          const identifier = pkg.webBillingProduct?.identifier;
+          return identifier === selectedPackageDetails.revenueCatId;
+        });
+        
+        console.log('RevenueCat package search:', {
+          selectedPackage: selectedPackageDetails.title,
+          searchingForId: selectedPackageDetails.revenueCatId,
+          availablePackages: offerings.map(pkg => ({
+            identifier: pkg.webBillingProduct?.identifier,
+            title: pkg.webBillingProduct?.title || pkg.webBillingProduct?.identifier
+          })),
+          foundPackage: estimatePackage ? 'Yes' : 'No'
         })
-        // Optionally: console.log("Purchase successful:", purchaseResult)
+      }
 
-        // After successful purchase, confirm the estimate in backend
-        const fromDate = new Date(data.fromDate)
-        const toDate = new Date(data.toDate)
+      // Track payment success status
+      let paymentProcessed = false
+      let purchaseResult = null
+      let shouldProceedWithoutPayment = false
+
+      // --- RevenueCat Payment Flow (if available) ---
+      if (estimatePackage && estimatePackage.webBillingProduct) {
+        try {
+          console.log('Processing RevenueCat purchase...')
+          purchaseResult = await Purchases.getSharedInstance().purchase({
+            rcPackage: estimatePackage,
+          })
+          console.log("RevenueCat purchase successful:", purchaseResult)
+          paymentProcessed = true
+        } catch (purchaseError: any) {
+          console.error('RevenueCat purchase failed:', purchaseError)
+          
+          // Handle specific RevenueCat error types
+          if (purchaseError.code === ErrorCode.UserCancelledError) {
+            throw new Error('Payment was cancelled. Please try again if you wish to complete your booking.')
+          } else if (purchaseError.code === ErrorCode.PaymentPendingError) {
+            throw new Error('Payment is pending. Please check your payment method and try again.')
+          } else if (purchaseError.code === ErrorCode.PurchaseNotAllowedError) {
+            throw new Error('Purchase not allowed. Please check your account settings.')
+          } else if (purchaseError.code === ErrorCode.PurchaseInvalidError) {
+            throw new Error('Invalid purchase. Please try selecting a different package.')
+          } else if (purchaseError.code === ErrorCode.NetworkError) {
+            throw new Error('Network error during payment. Please check your connection and try again.')
+          } else {
+            // For any other error, throw a general payment error
+            throw new Error(`Payment failed: ${purchaseError.message || 'Unknown error'}. Please try again.`)
+          }
+        }
+      } else if (offerings.length > 0) {
+        // Enhanced error message with more details
+        const packageDetails = selectedPackageDetails.title
+        const revenueCatId = selectedPackageDetails.revenueCatId
+        const availableIds = offerings.map(pkg => pkg.webBillingProduct?.identifier).filter(Boolean).join(', ')
+        
+        console.warn(`RevenueCat package not found. Package: ${packageDetails}, Expected ID: ${revenueCatId}, Available IDs: ${availableIds}`)
+        
+        // Instead of throwing an error, proceed without payment processing for packages not in RevenueCat
+        console.warn(`Proceeding without RevenueCat payment for package: ${packageDetails}`)
+        shouldProceedWithoutPayment = true
+      } else {
+        // If no RevenueCat offerings are loaded, warn but allow to proceed
+        console.warn("No RevenueCat offerings available, proceeding with estimate confirmation only")
+        shouldProceedWithoutPayment = true
+      }
+
+      // Only proceed with booking creation if payment was successful OR no payment was required
+      if (paymentProcessed || shouldProceedWithoutPayment) {
+        // After successful purchase (or if no RevenueCat), confirm the estimate in backend
         const estimateData = {
           postId: _postId,
-          fromDate: fromDate.toISOString(),
-          toDate: toDate.toISOString(),
-          guests: [],
-          baseRate: packagePrice,
+          fromDate: data.fromDate,
+          toDate: data.toDate,
+          guests: Array.isArray(data.guests) ? data.guests.map(g => typeof g === 'string' ? g : g.id) : [],
+          baseRate: effectivePost?.baseRate || 150, // Send the post's base rate for backend calculations
           duration: selectedDuration,
           customer: user.id,
           packageType: selectedPackage,
+          isWineSelected,
+          totalAmount: finalTotal,
+          revenueCatPurchaseResult: purchaseResult // Include purchase details
         }
+        
+        console.log('Confirming estimate with data:', estimateData)
+        
         const response = await fetch(`/api/estimates/${data.id}/confirm`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(estimateData),
         })
+        
         if (!response.ok) {
           const errorData = await response.json()
+          console.error('Estimate confirmation error:', errorData)
           throw new Error(errorData.error || 'Failed to confirm estimate')
         }
+        
         const result = await response.json()
+        console.log('Estimate confirmation result:', result)
         setPaymentSuccess(true)
-        setTimeout(() => {
-          router.push(`/booking-confirmation?total=${packagePrice}&duration=${selectedDuration}`)
-        }, 1500)
-      } catch (purchaseError) {
-        // Handle specific RevenueCat error codes
-        if (purchaseError instanceof Error) {
-          const rcError = purchaseError as RevenueCatError
-          if (rcError.code === ErrorCode.UserCancelledError) {
-            setPaymentError(
-              "Purchase was cancelled. Please try again if you'd like to complete your estimate.",
-            )
-            return
-          }
-          if (rcError.code === ErrorCode.PurchaseInvalidError) {
-            setPaymentError(
-              'There was an issue with the purchase. Please try again or contact support.',
-            )
-            return
-          }
-          if (rcError.code === ErrorCode.NetworkError) {
-            setPaymentError('Network error occurred. Please check your connection and try again.')
-            return
-          }
+        
+        // Check if a booking was created and redirect accordingly
+        if (result.booking && result.booking.id) {
+          setTimeout(() => {
+            router.push(`/booking-confirmation?bookingId=${result.booking.id}`)
+          }, 1500)
+        } else {
+          // Fallback to the original redirect if no booking ID is available
+          setTimeout(() => {
+            router.push(`/booking-confirmation?total=${finalTotal}&duration=${selectedDuration}`)
+          }, 1500)
         }
-        setPaymentError('Failed to complete purchase. Please try again or contact support.')
+      } else {
+        throw new Error('Payment processing failed. No booking was created.')
       }
     } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : 'An unexpected error occurred')
+      console.error('Complete estimate error:', error)
+      setPaymentError(error instanceof Error ? error.message : "An unexpected error occurred")
     } finally {
       setPaymentLoading(false)
     }
@@ -496,7 +554,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
       })
   }
 
-  if (loading || loadingOfferings) {
+  if (loading || loadingOfferings || loadingPost) {
     return (
       <div className="container py-10">
         <h1 className="text-4xl font-bold tracking-tighter mb-8">Start your curated stay</h1>
@@ -518,81 +576,80 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     <div className="container py-10">
       <h1 className="text-4xl font-bold tracking-tighter mb-8">Estimate Details</h1>
       <Tabs defaultValue="details" className="max-w-screen-lg mx-auto">
-        {/* --- Summary Header Section --- */}
-        <div className="pt-12 pb-6">
-          <div className="bg-muted p-6 rounded-lg border border-border mb-6 text-center">
-            <h2 className="text-3xl font-semibold mb-2">R{_bookingTotal}</h2>
-            <p className="text-lg text-muted-foreground">Total for {_bookingDuration} nights</p>
+
+          {/* --- Summary Header Section --- */}
+          <div className="pt-12 pb-6">
+            <div className="bg-muted p-6 rounded-lg border border-border mb-6 text-center">
+              <h2 className="text-3xl font-semibold mb-2">{formatPrice(calculateTotalPrice())}</h2>
+              <p className="text-lg text-muted-foreground">Total for {selectedDuration} nights</p>
+              {isWineSelected && (
+                <p className="text-sm text-muted-foreground mt-1">Includes wine package add-on</p>
+              )}
+            </div>
           </div>
-        </div>
 
         <TabsList className="mb-6 bg-muted p-2 rounded-full flex flex-row gap-2">
-          <TabsTrigger
-            value="details"
-            className="px-3 py-2 rounded-full flex items-center gap-2 data-[state=active]:bg-secondary data-[state=active]:text-foreground"
-          >
-            <FileText className="h-5 w-5" />
+          <TabsTrigger value="details" className="px-3 py-2 rounded-full flex items-center gap-2 data-[state=active]:bg-secondary data-[state=active]:text-foreground">
+          <FileText className="h-5 w-5" />
             Details
           </TabsTrigger>
-          <TabsTrigger
-            value="guests"
-            className="px-3 py-2 rounded-full flex items-center gap-2 data-[state=active]:bg-secondary data-[state=active]:text-foreground"
-          >
-            <UserIcon className="h-5 w-5" />
+          <TabsTrigger value="guests" className="px-3 py-2 rounded-full flex items-center gap-2 data-[state=active]:bg-secondary data-[state=active]:text-foreground">
+          <UserIcon className="h-5 w-5" />
             Guests
           </TabsTrigger>
         </TabsList>
         <TabsContent value="details">
+
+
           {/* --- Estimate Info Section --- */}
           {data && 'post' in data && typeof data?.post !== 'string' ? (
-            <div className="flex items-start flex-col md:flex-row gap-5 md:gap-10 mb-8">
-              <div className="md:py-5 py-3">
-                <h1 className="text-4xl mb-3 font-bold">{data?.post.title}</h1>
-                <div className="flex flex-col gap-2">
-                  <label className="text-lg font-medium">Estimate Dates:</label>
-                  <Calendar
-                    mode="range"
-                    selected={dateRange}
-                    numberOfMonths={2}
-                    className="max-w-md"
-                    disabled={() => true}
-                  />
-                  <div className="text-muted-foreground text-sm mt-1">
-                    {dateRange && dateRange.from && dateRange.to
-                      ? `From ${formatDateTime(dateRange.from)} to ${formatDateTime(dateRange.to)}`
-                      : 'Select a start and end date'}
-                  </div>
-                  {!areDatesAvailable && (
-                    <div className="text-red-400">
-                      The selected dates are not availabe for booking. Please create a new estimate
-                      with different dates.
-                      {typeof data.post === 'object' && data.post.slug && (
-                        <Button asChild variant="link" className="py-0 h-max px-0">
-                          <Link href={`/posts/${data.post.slug}`}>Create New Estimate</Link>
-                        </Button>
-                      )}
+            <div className="flex flex-col gap-5 mb-8">
+              <Card className="w-full">
+                <CardHeader>
+                  <CardTitle>Estimate Summary</CardTitle>
+                  <CardDescription>Your estimation information</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3">
+                    {!!effectivePost?.meta?.image && (
+                      <div className="w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border border-border bg-white">
+                        <Media
+                          resource={effectivePost?.meta?.image || undefined}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <h1 className="text-2xl font-bold">{effectivePost?.title}</h1>
+                      <span className="font-medium">Date Estimated: {formatDateTime(data?.createdAt)}</span>
+                      <span className="font-medium">Guests: {Array.isArray(data?.guests) ? data.guests.length : 0}</span>
                     </div>
-                  )}
-                </div>
-              </div>
-              <div className="w-full rounded-md overflow-hidden bg-muted p-2 flex items-center gap-3">
-                {!!data?.post.meta?.image && (
-                  <div className="w-24 h-24 flex-shrink-0 rounded-md overflow-hidden border border-border bg-white">
-                    <Media
-                      resource={data?.post.meta?.image || undefined}
-                      className="w-full h-full object-cover"
-                    />
                   </div>
-                )}
-                <div className="flex flex-col text-white">
-                  <span className="font-medium">
-                    Date Estimated: {formatDateTime(data?.createdAt)}
-                  </span>
-                  <span className="font-medium">
-                    Guests: {Array.isArray(data?.guests) ? data.guests.length : 0}
-                  </span>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="w-full">
+                <CardHeader>
+                  <CardTitle className="text-xl">Estimate Dates</CardTitle>
+                  <CardDescription>Your selected stay dates</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-4">
+                    <Calendar
+                      mode="range"
+                      selected={dateRange}
+                      numberOfMonths={2}
+                      className="max-w-md mx-auto"
+                      disabled={() => true}
+                    />
+                    <div className="text-muted-foreground text-sm text-center">
+                      {dateRange && dateRange.from && dateRange.to
+                        ? `From ${formatDateTime(dateRange.from.toISOString())} to ${formatDateTime(dateRange.to.toISOString())}`
+                        : 'Select a start and end date'}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           ) : (
             <div className="mb-8">Error loading estimate details</div>
@@ -600,73 +657,251 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
 
           {/* --- Package Selection --- */}
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4">Your Selected Package</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Main Package */}
-              <Card className="border-2 border-primary bg-primary/5">
-                <CardHeader>
-                  <CardTitle>
-                    {selectedPackage ? packageDetails[selectedPackage]?.title : 'Loading...'}
-                  </CardTitle>
-                  <CardDescription>
-                    {selectedPackage ? packageDetails[selectedPackage]?.description : ''}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {selectedPackage &&
-                      packageDetails[selectedPackage]?.features.map((feature, index) => (
+            <h2 className="text-2xl font-semibold mb-4">Choose Your Package</h2>
+            <p className="text-muted-foreground mb-6">Select the package that best fits your stay duration and needs</p>
+            
+            {/* Package Filter Info */}
+            {getPackageFilterInfo() && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800 font-medium">
+                  📅 {getPackageFilterInfo()}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Some packages may not be available due to minimum/maximum night requirements or seasonal restrictions.
+                </p>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(packageDetails).map(([packageId, packageInfo]) => {
+                // Type assertion for packageInfo
+                const pkg = packageInfo as EnhancedPackageDetails
+                
+                const isSelected = selectedPackage === packageId
+                // Use the package's price field (which contains either package price or post baseRate)
+                const calculatedPrice = pkg.price * pkg.multiplier
+                const totalPrice = calculatedPrice * selectedDuration
+                
+                return (
+                  <Card 
+                    key={packageId}
+                    className={cn(
+                      "cursor-pointer transition-all hover:shadow-lg",
+                      isSelected 
+                        ? "border-2 border-primary bg-primary/5 shadow-md" 
+                        : "border hover:border-primary/50"
+                    )}
+                    onClick={() => handlePackageSelect(packageId)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {pkg.title}
+                            {isSelected && (
+                              <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                <Check className="w-4 h-4 text-primary-foreground" />
+                              </div>
+                            )}
+                          </CardTitle>
+                          <CardDescription className="text-sm mt-1">
+                            {pkg.description}
+                          </CardDescription>
+                          
+                          {/* Duration compatibility indicator */}
+                          <div className="mt-2 flex items-center gap-2 text-xs">
+                            <Badge variant="outline" className="text-xs">
+                              {pkg.minNights === 1 && pkg.maxNights >= 365 
+                                ? "Any duration" 
+                                : `${pkg.minNights}-${pkg.maxNights} nights`}
+                            </Badge>
+                            {selectedDuration >= pkg.minNights && selectedDuration <= pkg.maxNights && (
+                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                                ✓ Perfect for {selectedDuration} nights
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Package Pricing */}
+                      <div className="mt-3 p-3 bg-muted/50 rounded-lg">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Base Rate:</span>
+                          <span>{formatPrice(pkg.price)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Multiplier:</span>
+                          <span>{pkg.multiplier}x</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm font-medium border-t pt-2 mt-2">
+                          <span>Per Night:</span>
+                          <span className="text-primary">{formatPrice(calculatedPrice)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-lg font-bold">
+                          <span>Total ({selectedDuration} nights):</span>
+                          <span className="text-primary">{formatPrice(totalPrice)}</span>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent>
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                          Features Included:
+                        </h4>
+                        <ul className="space-y-1">
+                          {pkg.features?.slice(0, 4).map((feature: string, index: number) => (
+                            <li key={index} className="flex items-start text-sm">
+                              <Check className="mr-2 h-3 w-3 text-primary mt-0.5 flex-shrink-0" />
+                              <span className="leading-tight">{feature}</span>
+                            </li>
+                          ))}
+                          {pkg.features?.length > 4 && (
+                            <li className="text-sm text-muted-foreground italic">
+                              +{pkg.features.length - 4} more features...
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    </CardContent>
+                    
+                    <CardFooter>
+                      <Button 
+                        variant={isSelected ? "default" : "outline"} 
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handlePackageSelect(packageId)
+                        }}
+                      >
+                        {isSelected ? "Selected" : "Select Package"}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                )
+              })}
+            </div>
+
+            {/* Show message if no packages are available for the duration */}
+            {Object.keys(packageDetails).length === 0 && (
+              <div className="text-center p-8 bg-amber-50 border border-amber-200 rounded-lg">
+                <h3 className="text-lg font-medium text-amber-800 mb-2">
+                  No packages available for {selectedDuration} nights
+                </h3>
+                <p className="text-amber-700 text-sm mb-4">
+                  The selected stay duration doesn't match any available packages. Try adjusting your dates or contact us for custom arrangements.
+                </p>
+                <Button variant="outline" onClick={() => setSelectedDuration(1)}>
+                  Reset to 1 night
+                </Button>
+              </div>
+            )}
+
+            {/* Selected Package Details */}
+            {selectedPackage && packageDetails[selectedPackage] && (
+              <div className="mt-8 p-6 bg-primary/5 border-2 border-primary rounded-lg">
+                <h3 className="text-xl font-semibold mb-3 text-primary">
+                  Selected: {packageDetails[selectedPackage]?.title}
+                </h3>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-medium mb-2">Complete Features List:</h4>
+                    <ul className="space-y-1">
+                      {packageDetails[selectedPackage]?.features?.map((feature: string, index: number) => (
+                        <li key={index} className="flex items-start text-sm">
+                          <Check className="mr-2 h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Pricing Breakdown:</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Base Rate per Night:</span>
+                        <span>{formatPrice(packageDetails[selectedPackage]?.price || 0)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Package Multiplier:</span>
+                        <span>{packageDetails[selectedPackage]?.multiplier || 1}x</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Adjusted Rate per Night:</span>
+                        <span>{formatPrice((packageDetails[selectedPackage]?.price || 0) * (packageDetails[selectedPackage]?.multiplier || 1))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Duration:</span>
+                        <span>{selectedDuration} nights</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-lg border-t pt-2">
+                        <span>Total Package Price:</span>
+                        <span className="text-primary">{formatPrice(packagePrice || 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Wine Package Add-on - Only show for non-wine packages */}
+            {selectedPackage && selectedPackage !== 'wine_package' && packageDetails.wine_package && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-3">Optional Add-ons</h3>
+                <Card 
+                  className={cn(
+                    "cursor-pointer transition-all",
+                    isWineSelected ? "border-primary bg-primary/5" : "hover:border-primary/50"
+                  )}
+                  onClick={() => setIsWineSelected(!isWineSelected)}
+                >
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <CardTitle className="flex items-center gap-2">
+                          {packageDetails.wine_package.title}
+                          {isWineSelected && (
+                            <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                              <Check className="w-3 h-3 text-primary-foreground" />
+                            </div>
+                          )}
+                        </CardTitle>
+                        <CardDescription>{packageDetails.wine_package.description}</CardDescription>
+                        <div className="mt-2 text-sm text-primary font-medium">
+                          +{formatPrice(packageDetails.wine_package.price * packageDetails.wine_package.multiplier)} per night
+                        </div>
+                      </div>
+                      <Switch
+                        id="wine-package"
+                        checked={isWineSelected}
+                        onCheckedChange={(checked) => setIsWineSelected(checked)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-1">
+                      {packageDetails.wine_package.features && packageDetails.wine_package.features.map((feature: string, index: number) => (
                         <li key={index} className="flex items-center text-sm">
-                          <Check className="mr-2 h-4 w-4 text-primary" />
+                          <Check className="mr-2 h-3 w-3 text-primary" />
                           {feature}
                         </li>
                       ))}
-                  </ul>
-                </CardContent>
-                <CardFooter>
-                  <span className="text-2xl font-bold">
-                    {formatPrice(packagePrice)} with membership
-                  </span>
-                </CardFooter>
-              </Card>
-              {/* Wine Package Add-on */}
-              <Card
-                className={cn(
-                  'border-2 border-border shadow-lg transition-all cursor-pointer',
-                  isWineSelected ? 'border-primary bg-primary/5' : 'hover:border-primary/50',
-                )}
-                onClick={() => setIsWineSelected(!isWineSelected)}
-              >
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle>{packageDetails.wine.title}</CardTitle>
-                      <CardDescription>{packageDetails.wine.description}</CardDescription>
-                    </div>
-                    <Switch
-                      id="wine-package"
-                      checked={isWineSelected}
-                      onCheckedChange={(checked) => {
-                        setIsWineSelected(checked)
-                      }}
-                      onClick={(e) => e.stopPropagation()} // Prevent card click when clicking switch
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {packageDetails.wine.features.map((feature, index) => (
-                      <li key={index} className="flex items-center text-sm">
-                        <Check className="mr-2 h-4 w-4 text-primary" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
+          
+        
         </TabsContent>
+
+
+
+
+
 
         <TabsContent value="guests">
           {/* --- Customer & Guests Section --- */}
@@ -699,10 +934,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 </div>
               </div>
               {guests.map((guest) => (
-                <div
-                  key={guest.id}
-                  className="shadow-sm p-2 border border-border rounded-lg flex items-center gap-2"
-                >
+                <div key={guest.id} className="shadow-sm p-2 border border-border rounded-lg flex items-center gap-2">
                   <div className="p-2 border border-border rounded-full">
                     <UserIcon className="size-6" />
                   </div>
@@ -717,61 +949,81 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         </TabsContent>
       </Tabs>
 
-      {/* --- Estimate Summary --- */}
-      <div className="mb-8 bg-muted p-6 rounded-lg border border-border">
-        <h2 className="text-2xl font-semibold mb-4">Estimate Summary</h2>
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-muted-foreground">Package:</span>
-          <span className="font-medium">
-            {selectedPackage ? packageDetails[selectedPackage]?.title : 'Not selected'}
-          </span>
-        </div>
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-muted-foreground">With membership:</span>
-          <span className="font-medium">{formatPrice(packagePrice)}</span>
-        </div>
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-muted-foreground">Duration:</span>
-          <span className="font-medium">{selectedDuration} nights</span>
-        </div>
-        <div className="flex justify-between items-center mb-6">
-          <span className="text-muted-foreground">Total:</span>
-          <span className="text-2xl font-bold">{formatPrice(_bookingTotal)}</span>
-        </div>
-        {/* Complete Estimate Button */}
-        <Button
-          onClick={handleEstimate}
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-          disabled={
-            paymentLoading || paymentSuccess || !_postId || !selectedPackage || !areDatesAvailable
-          }
-        >
-          {paymentLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </>
-          ) : paymentSuccess ? (
-            'Estimate Confirmed!'
-          ) : !_postId ? (
-            'Missing Property Information'
-          ) : !selectedPackage ? (
-            'Please Select a Package'
-          ) : !areDatesAvailable ? (
-            'Dates Not Available'
-          ) : (
-            `Complete Estimate - ${formatPrice(_bookingTotal)}`
-          )}
-        </Button>
-        {!_postId && (
-          <p className="text-red-500 text-sm mt-2">
-            Property information is missing. Please start from the property page.
-          </p>
-        )}
-        {!selectedPackage && (
-          <p className="text-red-500 text-sm mt-2">Please select a package to continue.</p>
-        )}
-      </div>
+        {/* --- Estimate Summary --- */}
+        <div className="mb-8 bg-muted p-6 rounded-lg border border-border">
+            <h2 className="text-2xl font-semibold mb-4">Estimate Summary</h2>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-muted-foreground">Package:</span>
+              <span className="font-medium">
+                {selectedPackage ? packageDetails[selectedPackage as keyof typeof packageDetails]?.title : "Not selected"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-muted-foreground">Package Total:</span>
+              <span className="font-medium">
+                {formatPrice(packagePrice)}
+              </span>
+            </div>
+            {isWineSelected && packageDetails.wine_package && (
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-muted-foreground">Wine Package Add-on:</span>
+                <span className="font-medium">
+                  {formatPrice(packageDetails.wine_package.price * packageDetails.wine_package.multiplier * selectedDuration)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-muted-foreground">Duration:</span>
+              <span className="font-medium">{selectedDuration} nights</span>
+            </div>
+            {paymentError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-800 text-sm">{paymentError}</p>
+              </div>
+            )}
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-muted-foreground">Total:</span>
+              <span className="text-2xl font-bold">
+                {formatPrice(calculateTotalPrice())}
+              </span>
+            </div>
+            {/* Complete Estimate Button */}
+            <Button
+              onClick={handleEstimate}
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={paymentLoading || paymentSuccess || !_postId || !selectedPackage}
+            >
+              {paymentLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : paymentSuccess ? (
+                "Estimate Confirmed!"
+              ) : !_postId ? (
+                "Missing Property Information"
+              ) : !selectedPackage ? (
+                "Please Select a Package"
+              ) : (
+                `Complete Estimate - ${formatPrice(calculateTotalPrice())}`
+              )}
+            </Button>
+            {!_postId && (
+              <p className="text-red-500 text-sm mt-2">
+                Property information is missing. Please start from the property page.
+              </p>
+            )}
+            {!selectedPackage && (
+              <p className="text-red-500 text-sm mt-2">
+                Please select a package to continue.
+              </p>
+            )}
+            {paymentSuccess && (
+              <p className="text-green-600 text-sm mt-2 text-center">
+                🎉 Estimate confirmed successfully! Redirecting to booking confirmation...
+              </p>
+            )}
+          </div>
     </div>
   )
-}
+} 
