@@ -1,5 +1,5 @@
 import { hostOrSelfField } from '@/access/adminOrSelfField'
-import { isAdmin } from '@/access/isAdmin'
+import { isAdmin, isHost } from '@/access/isAdmin'
 import { isHostField } from '@/access/isAdminField'
 import { slugField } from '@/fields/slug'
 import type { CollectionConfig } from 'payload'
