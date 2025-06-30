@@ -29,18 +29,49 @@ import {
 } from '@payloadcms/plugin-seo/fields'
 import { slugField } from '../../fields/slug'
 import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
+import { requiresSubscriptionForAdmin } from '../../access/requiresSubscription'
+import { PayloadRequest } from 'payload'
 
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: ({ req: { user } }) => {
-      // Definitive access control for Plek creation
+    create: async ({ req }: { req: PayloadRequest }) => {
+      // Definitive access control for Plek creation with subscription check
+      const { user } = req
       if (!user) return false
       
       const roles = user.role || []
       
-      // Allow admins, hosts, and customers to create Pleks
-      return roles.includes('admin') || roles.includes('host') || roles.includes('customer')
+      // Admins bypass subscription check
+      if (roles.includes('admin')) {
+        return true
+      }
+      
+      // For hosts and customers, require active subscription
+      if (roles.includes('host') || roles.includes('customer')) {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for create access')
+            return false
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for active entitlements
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasActiveSubscription = activeEntitlements.length > 0
+          
+          return hasActiveSubscription
+        } catch (error) {
+          console.error('Subscription check error for create access:', error)
+          return false
+        }
+      }
+      
+      return false
     },
     read: authenticatedOrPublished,
     update: ({ req: { user } }) => {
@@ -79,13 +110,43 @@ export const Posts: CollectionConfig<'posts'> = {
       
       return false
     },
-    // Adding explicit admin access control
-    admin: ({ req: { user } }) => {
+    // Adding subscription-enforced admin access control
+    admin: async ({ req }: { req: PayloadRequest }) => {
+      const { user } = req
       if (!user) return false
+      
       const roles = user.role || []
       
-      // Allow admins, hosts, and customers to access admin interface
-      return roles.includes('admin') || roles.includes('host') || roles.includes('customer')
+      // Admins bypass subscription check
+      if (roles.includes('admin')) {
+        return true
+      }
+      
+      // For hosts and customers, check subscription
+      if (roles.includes('host') || roles.includes('customer')) {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for admin access')
+            return false
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for active entitlements
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasActiveSubscription = activeEntitlements.length > 0
+          
+          return hasActiveSubscription
+        } catch (error) {
+          console.error('Subscription check error for admin access:', error)
+          return false
+        }
+      }
+      
+      return false
     },
   },
   // This config controls what's populated by default when a post is referenced
