@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { useForm } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp'
+import { useUserContext } from '@/context/UserContext'
 
 type EmailFormValues = {
   email: string
@@ -43,13 +44,16 @@ function OtpInput({ onSubmit, loading }: { onSubmit: (otp: string) => void; load
 }
 
 export default function EmailAuthForm() {
-  const [step, setStep] = React.useState<'email' | 'otp'>('otp')
+  const [step, setStep] = React.useState<'email' | 'otp'>('email')
   const [email, setEmail] = React.useState('')
+  const [authRequestId, setAuthRequestId] = React.useState('')
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const next = searchParams.get('next')
+
+  const { handleAuthChange } = useUserContext()
 
   const form = useForm<EmailFormValues>({
     defaultValues: { email: '' },
@@ -59,13 +63,17 @@ export default function EmailAuthForm() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/users/email-auth', {
+      const res = await fetch('/api/authRequests/magic', {
         method: 'POST',
         body: JSON.stringify({ email: values.email }),
         headers: { 'Content-Type': 'application/json' },
       })
       if (!res.ok) throw new Error('Failed to send email')
-      setEmail(values.email)
+
+      const data = await res.json()
+
+      setEmail(data.email)
+      setAuthRequestId(data.authRequestId)
       setStep('otp')
     } catch (err: any) {
       setError(err.message || 'Failed to send email')
@@ -78,15 +86,16 @@ export default function EmailAuthForm() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/users/email-auth/verify', {
+      const res = await fetch('/api/authRequests/verify-code', {
         method: 'POST',
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({ email, otp, requestId: authRequestId }),
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       })
       if (!res.ok) throw new Error('Invalid OTP')
       // Optionally: handleAuthChange()
       // Optionally: validateRedirect
+      handleAuthChange()
       router.push(next && typeof next === 'string' ? next : '/bookings')
     } catch (err: any) {
       setError(err.message || 'Invalid OTP')

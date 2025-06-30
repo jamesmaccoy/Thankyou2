@@ -10,9 +10,9 @@ const bodySchema = z.object({
 
 export const InitiateMagicAuth: Endpoint = {
   method: 'post',
-  path: '/auth/magic',
+  path: '/magic',
   handler: async (req) => {
-    const body = bodySchema.safeParse(req.body)
+    const body = bodySchema.safeParse(await req.json?.())
 
     if (!body.success) {
       return Response.json(
@@ -30,7 +30,7 @@ export const InitiateMagicAuth: Endpoint = {
 
     const code = await generateHOTP(secret, 10, 6)
 
-    await req.payload.create({
+    const authRequest = await req.payload.create({
       collection: 'authRequests',
       data: {
         email,
@@ -43,6 +43,7 @@ export const InitiateMagicAuth: Endpoint = {
       {
         message: `Magic auth initiated for ${email}`,
         email,
+        authRequestId: authRequest.id,
       },
       {
         status: 200,
