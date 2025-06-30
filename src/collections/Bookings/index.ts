@@ -4,6 +4,7 @@ import { isHostField } from '@/access/isAdminField'
 import { slugField } from '@/fields/slug'
 import type { CollectionConfig } from 'payload'
 import { hostOrSelfOrGuests } from './access/adminOrSelfOrGuests'
+
 import { generateJwtToken, verifyJwtToken } from '@/utilities/token'
 import { unavailableDates } from './endpoints/unavailable-dates'
 import { checkAvailability } from './endpoints/check-availability'
@@ -19,15 +20,8 @@ export const Booking: CollectionConfig = {
     interface: 'Booking',
   },
   admin: {
-    hidden: ({ user }) => {
-      if (!user) return true
-      const roles = user.role || []
-      return !roles.includes('admin') && !roles.includes('host')
-    },
-    group: 'Plek Manager',
-    description: '📅 Manage your Plek bookings and guest reservations',
-    defaultColumns: ['customer', 'plek', 'startDate', 'endDate', 'paymentStatus', 'createdAt'],
-    useAsTitle: 'customer',
+    useAsTitle: 'id',
+    defaultColumns: ['customer', 'post', 'fromDate', 'toDate', 'guests'],
   },
   endpoints: [
     unavailableDates,
@@ -455,35 +449,79 @@ export const Booking: CollectionConfig = {
     },
   ],
   access: {
-    create: ({ req: { user } }) => {
-      if (!user) return false
-      const roles = user.role || []
-      return roles.includes('admin') || roles.includes('customer')
-    },
-    read: ({ req: { user } }) => {
-      if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
-        return { customer: { equals: user.id } }
-      }
-      return false
-    },
-    update: ({ req: { user } }) => {
-      if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
-        return { customer: { equals: user.id } }
-      }
-      return false
-    },
-    delete: ({ req: { user } }) => {
-      if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
-        return { customer: { equals: user.id } }
-      }
-      return false
-    },
+    // create: async ({ req: { user } }) => {
+    //   if (!user) return false
+    //   const roles = user.role || []
+    //   
+    //   // Admins bypass subscription check
+    //   if (roles.includes('admin')) return true
+    //   
+    //   // Hosts and customers need active subscription to create bookings
+    //   if (roles.includes('host') || roles.includes('customer')) {
+    //     try {
+    //       const REVENUECAT_PUBLIC_SDK_KEY = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+    //       
+    //       if (!REVENUECAT_PUBLIC_SDK_KEY) {
+    //         console.error('RevenueCat API key not found')
+    //         return false
+    //       }
+    //       
+    //       const response = await fetch(`https://api.revenuecat.com/v1/subscribers/${user.id}`, {
+    //         headers: {
+    //           'Authorization': `Bearer ${REVENUECAT_PUBLIC_SDK_KEY}`,
+    //           'Content-Type': 'application/json',
+    //         },
+    //       })
+    //       
+    //       if (!response.ok) {
+    //         console.error('RevenueCat API error:', response.status)
+    //         return false
+    //       }
+    //       
+    //       const subscriberData = await response.json()
+    //       return subscriberData.subscriber?.entitlements && 
+    //              Object.keys(subscriberData.subscriber.entitlements).length > 0
+    //              
+    //     } catch (error) {
+    //       console.error('Subscription check error for booking creation:', error)
+    //       return false
+    //     }
+    //   }
+    //   
+    //   return false
+    // },
+    // read: hostOrSelfOrGuests('customer', 'guests'),
+    // update: ({ req: { user } }) => {
+    //   if (!user) return false
+    //   const roles = user.role || []
+    //   
+    //   // Admins and hosts can update all bookings
+    //   if (roles.includes('admin') || roles.includes('host')) return true
+    //   
+    //   // Customers can update their own bookings
+    //   if (roles.includes('customer')) {
+    //     return { customer: { equals: user.id } }
+    //   }
+    //   
+    //   return false
+    // },
+    // delete: ({ req: { user } }) => {
+    //   if (!user) return false
+    //   const roles = user.role || []
+    //   
+    //   // Admins and hosts can delete all bookings
+    //   if (roles.includes('admin') || roles.includes('host')) return true
+    //   
+    //   // Customers can delete their own bookings
+    //   if (roles.includes('customer')) {
+    //     return { customer: { equals: user.id } }
+    //   }
+    //   
+    //   return false
+    // },
+  },
+  hooks: {
+    beforeChange: [checkAvailabilityHook],
   },
   fields: [
     {
@@ -599,144 +637,6 @@ export const Booking: CollectionConfig = {
           pickerAppearance: 'dayAndTime',
         },
       },
-      access: {
-        update: isHostField,
-      },
-    },
-    {
-      name: 'packageType',
-      type: 'text',
-      required: false,
-      label: 'Package Type ID',
-      admin: {
-        position: 'sidebar',
-        description: 'The ID of the package type (e.g., per_night, luxury_night, hosted_3nights)',
-      },
-      access: {
-        update: isHostField,
-      },
-    },
-    // Enhanced package information
-    {
-      name: 'packageDetails',
-      type: 'group',
-      label: 'Package Details',
-      admin: {
-        position: 'sidebar',
-        description: 'Detailed information about the purchased package',
-      },
-      fields: [
-        {
-          name: 'name',
-          type: 'text',
-          label: 'Package Name',
-          admin: {
-            description: 'Human-readable name of the package',
-          },
-        },
-        {
-          name: 'description',
-          type: 'textarea',
-          label: 'Package Description',
-          admin: {
-            description: 'Description of what the package includes',
-          },
-        },
-        {
-          name: 'multiplier',
-          type: 'number',
-          label: 'Price Multiplier',
-          admin: {
-            description: 'Multiplier applied to base rate',
-          },
-        },
-        {
-          name: 'features',
-          type: 'array',
-          label: 'Package Features',
-          fields: [
-            {
-              name: 'feature',
-              type: 'text',
-              required: true,
-            },
-          ],
-        },
-        {
-          name: 'revenueCatId',
-          type: 'text',
-          label: 'RevenueCat ID',
-          admin: {
-            description: 'RevenueCat package identifier',
-          },
-        },
-        {
-          name: 'category',
-          type: 'select',
-          label: 'Package Category',
-          options: [
-            { label: 'Standard', value: 'standard' },
-            { label: 'Luxury', value: 'luxury' },
-            { label: 'Hosted', value: 'hosted' },
-            { label: 'Specialty', value: 'specialty' },
-          ],
-        },
-        {
-          name: 'isHosted',
-          type: 'checkbox',
-          label: 'Is Hosted Package',
-          admin: {
-            description: 'Whether this package includes hosted services',
-          },
-        },
-      ],
-      access: {
-        update: isHostField,
-      },
-    },
-    // Pricing information
-    {
-      name: 'pricing',
-      type: 'group',
-      label: 'Pricing Information',
-      admin: {
-        position: 'sidebar',
-        description: 'Pricing details for this booking',
-      },
-      fields: [
-        {
-          name: 'baseRate',
-          type: 'number',
-          label: 'Base Rate per Night',
-          admin: {
-            description: 'Base rate before package multiplier',
-          },
-        },
-        {
-          name: 'packageRate',
-          type: 'number',
-          label: 'Package Rate per Night',
-          admin: {
-            description: 'Rate after applying package multiplier',
-          },
-        },
-        {
-          name: 'totalNights',
-          type: 'number',
-          label: 'Total Nights',
-          admin: {
-            description: 'Number of nights for this booking',
-          },
-        },
-        {
-          name: 'totalAmount',
-          type: 'number',
-          label: 'Total Amount',
-          admin: {
-            description: 'Final total amount for the booking',
-          },
-        },
-      ],
       access: {
         update: isHostField,
       },

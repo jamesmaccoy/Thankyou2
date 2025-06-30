@@ -4,6 +4,7 @@ export const checkAvailability: Endpoint = {
   method: 'get',
   path: '/check-availability',
   handler: async (req) => {
+    // Allow public access for availability checking, but require authentication for detailed booking info
     const { slug, postId, startDate, endDate } = req.query
 
     if ((!slug && !postId) || !startDate || !endDate) {
@@ -26,9 +27,6 @@ export const checkAvailability: Endpoint = {
             slug: {
               equals: slug,
             },
-          },
-          select: {
-            slug: true,
           },
           limit: 1,
         })
@@ -73,13 +71,34 @@ export const checkAvailability: Endpoint = {
       // If any bookings were found, the dates are not available
       const isAvailable = bookings.docs.length === 0
 
-      return Response.json({
+      // Prepare response with basic availability info
+      const response: any = {
         isAvailable,
         requestedRange: {
           startDate: startFormatted,
           endDate: endFormatted,
         },
-      })
+      }
+
+      // If user is authenticated and has host role, provide additional details
+      if (req.user) {
+        const roles = req.user.role || []
+        if (roles.includes('host') || roles.includes('admin')) {
+          response.userRole = roles.includes('admin') ? 'admin' : 'host'
+          response.canManageBookings = true
+          if (!isAvailable && bookings.docs.length > 0) {
+            response.conflictingBookings = bookings.docs.length
+          }
+        } else if (roles.includes('customer') || roles.includes('guest')) {
+          response.userRole = roles.includes('customer') ? 'customer' : 'guest'
+          response.canCreateBooking = roles.includes('customer')
+        }
+      } else {
+        // Public access - limited info
+        response.authRequired = 'Login required for booking creation'
+      }
+
+      return Response.json(response)
     } catch (error) {
       console.error('Error checking availability:', error)
       return Response.json({ message: 'Error checking availability' }, { status: 500 })
