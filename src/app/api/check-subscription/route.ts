@@ -5,7 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const authCookie = request.cookies.get('payload-token')
     if (!authCookie?.value) {
-      return NextResponse.json({ hasActiveSubscription: false }, { status: 401 })
+      return NextResponse.json({ hasActiveSubscription: false }, { status: 200 })
+      // display pricing regardless of authentication
     }
 
     // Get the user ID from the auth token
@@ -42,6 +43,11 @@ export async function GET(request: NextRequest) {
       sameSite: 'lax',
       path: '/'
     })
+
+    // Fetch offerings
+    const offerings = await purchases.getOfferings()
+    console.log("All available package identifiers:", offerings.current?.availablePackages.map(pkg => pkg.identifier));
+    console.log("All available webBillingProduct identifiers:", offerings.current?.availablePackages.map(pkg => pkg.webBillingProduct?.identifier));
 
     return response
   } catch (error) {
