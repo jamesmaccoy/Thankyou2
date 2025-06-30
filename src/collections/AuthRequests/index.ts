@@ -1,13 +1,18 @@
 import { CollectionConfig } from 'payload'
 import { InitiateMagicAuth } from './endpoints/initiate-magic-auth'
 import { VerifyCode } from './endpoints/verify-code'
+import { sendMagicEmail } from './hooks/send-magic-email'
+import { VerifyMagicToken } from './endpoints/verify-magic-token'
 
 export const AuthRequests: CollectionConfig = {
   slug: 'authRequests', // changed from "auth-requests"
   admin: {
     // hidden: true,
   },
-  endpoints: [InitiateMagicAuth, VerifyCode],
+  hooks: {
+    afterChange: [sendMagicEmail],
+  },
+  endpoints: [InitiateMagicAuth, VerifyCode, VerifyMagicToken],
   fields: [
     {
       name: 'email',

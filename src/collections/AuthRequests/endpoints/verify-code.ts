@@ -1,8 +1,8 @@
 import { cookies } from 'next/headers'
 import { Endpoint } from 'payload'
-import payload from 'payload'
 import { z } from 'zod'
 import jwt from 'jsonwebtoken'
+import crypto from 'node:crypto'
 
 const bodySchema = z.object({
   email: z.string().email(),
@@ -75,6 +75,8 @@ export const VerifyCode: Endpoint = {
         collection: 'users',
         data: {
           email,
+          password: crypto.randomBytes(16).toString('hex'), // Generate a random password
+          name: email.split('@')[0], // Use email prefix as name
         },
       })
     }
