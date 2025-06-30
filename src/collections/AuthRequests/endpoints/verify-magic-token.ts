@@ -1,4 +1,4 @@
-import { Endpoint } from 'payload'
+import { APIError, Endpoint } from 'payload'
 import crypto from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { cookies } from 'next/headers'
@@ -117,6 +117,20 @@ export const VerifyMagicToken: Endpoint = {
       return Response.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/bookings`)
     } catch (err) {
       console.error('Error verifying magic token:', err)
+
+      if (err instanceof APIError) {
+        if (err.status !== 500) {
+          return Response.json(
+            {
+              message: 'Invalid token',
+            },
+            {
+              status: 400,
+            },
+          )
+        }
+      }
+
       return Response.json(
         {
           message: 'Internal server error',
