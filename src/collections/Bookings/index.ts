@@ -1,10 +1,13 @@
 import { hostOrSelfField } from '@/access/adminOrSelfField'
-import { isHost } from '@/access/isAdmin'
+import { isAdmin } from '@/access/isAdmin'
 import { isHostField } from '@/access/isAdminField'
 import { slugField } from '@/fields/slug'
 import type { CollectionConfig } from 'payload'
 import { hostOrSelfOrGuests } from './access/adminOrSelfOrGuests'
 import { generateJwtToken, verifyJwtToken } from '@/utilities/token'
+import { unavailableDates } from './endpoints/unavailable-dates'
+import { checkAvailability } from './endpoints/check-availability'
+import { checkAvailabilityHook } from './hooks/checkAvailability'
 
 export const Booking: CollectionConfig = {
   slug: 'bookings',
@@ -27,6 +30,8 @@ export const Booking: CollectionConfig = {
     useAsTitle: 'customer',
   },
   endpoints: [
+    unavailableDates,
+    checkAvailability,
     // This endpoint is used to generate a token for the booking
     // and return it to the customer
     {
@@ -453,45 +458,30 @@ export const Booking: CollectionConfig = {
     create: ({ req: { user } }) => {
       if (!user) return false
       const roles = user.role || []
-      // Only hosts and customers can create bookings, guests cannot
-      return roles.includes('host') || roles.includes('customer')
+      return roles.includes('admin') || roles.includes('customer')
     },
     read: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('host')) return true
-      
-      // Build conditions for customers and guests
-      const conditions: any[] = []
-      
-      if (user.role?.includes('customer')) {
-        conditions.push({ customer: { equals: user.id } })
-      }
-      
-      if (user.role?.includes('guest')) {
-        conditions.push({ guests: { contains: user.id } })
-      }
-      
-      if (conditions.length === 0) return false
-      if (conditions.length === 1) return conditions[0]
-      
-      return { or: conditions }
-    },
-    update: ({ req: { user } }) => {
-      if (!user) return false
-      if (user.role?.includes('host')) return true
+      if (user.role?.includes('admin')) return true
       if (user.role?.includes('customer')) {
         return { customer: { equals: user.id } }
       }
-      // Guests cannot update bookings
+      return false
+    },
+    update: ({ req: { user } }) => {
+      if (!user) return false
+      if (user.role?.includes('admin')) return true
+      if (user.role?.includes('customer')) {
+        return { customer: { equals: user.id } }
+      }
       return false
     },
     delete: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('host')) return true
+      if (user.role?.includes('admin')) return true
       if (user.role?.includes('customer')) {
         return { customer: { equals: user.id } }
       }
-      // Guests cannot delete bookings
       return false
     },
   },
@@ -509,11 +499,11 @@ export const Booking: CollectionConfig = {
       name: 'customer',
       type: 'relationship',
       relationTo: 'users',
-      filterOptions: {
-        role: {
-          equals: 'customer',
-        },
-      },
+      // filterOptions: {
+      //   role: {
+      //     equals: 'customer',
+      //   },
+      // },
       access: {
         update: isHostField,
       },
@@ -522,7 +512,7 @@ export const Booking: CollectionConfig = {
       name: 'token',
       label: 'Token',
       type: 'text',
-      required: true,
+      required: false,
       admin: {
         readOnly: true,
         hidden: true,
