@@ -5,9 +5,10 @@ import { User } from '@/payload-types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Settings, User as UserIcon, Crown, Calendar, FileText } from 'lucide-react'
+import { Settings, User as UserIcon, Crown, Calendar, FileText, CreditCard } from 'lucide-react'
 import { RoleUpgrade } from '@/components/RoleUpgrade'
 import { useSubscription } from '@/hooks/useSubscription'
+import { useCustomerCenter } from '@/components/CustomerCenter'
 import Link from 'next/link'
 
 interface AccountClientProps {
@@ -16,6 +17,7 @@ interface AccountClientProps {
 
 export default function AccountClient({ user }: AccountClientProps) {
   const { isSubscribed, isLoading } = useSubscription()
+  const { CustomerCenterComponent, presentCustomerCenter } = useCustomerCenter()
 
   if (!user) {
     return (
@@ -60,6 +62,14 @@ export default function AccountClient({ user }: AccountClientProps) {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-16 flex flex-col gap-2"
+                  onClick={presentCustomerCenter}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  <span>Purchase History</span>
+                </Button>
                 {(isHost || isAdmin) && (
                   <>
                     <Link href="/plek/adminPage">
@@ -220,6 +230,9 @@ export default function AccountClient({ user }: AccountClientProps) {
           </Card>
         </div>
       </div>
+
+      {/* Customer Center Modal */}
+      <CustomerCenterComponent />
     </div>
   )
 } 
