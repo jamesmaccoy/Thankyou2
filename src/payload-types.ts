@@ -157,7 +157,7 @@ export interface Booking {
   id: string;
   title: string;
   customer?: (string | null) | User;
-  token?: string | null;
+  token: string;
   guests?: (string | User)[] | null;
   slug?: string | null;
   slugLock?: boolean | null;

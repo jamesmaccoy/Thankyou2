@@ -13,6 +13,7 @@ import { useSubscription } from '@/hooks/useSubscription'
 import { isHost } from '@/access/isAdmin'
 
 import { calculateTotal } from '@/lib/calculateTotal'
+import { hasUnavailableDateBetween } from '@/utilities/hasUnavailableDateBetween'
 
 export type EstimateBlockProps = EstimateBlockType & {
   className?: string
@@ -105,12 +106,19 @@ function getValidBaseRate(baseRate: unknown, baseRateOverride: unknown): number 
   return 150; // fallback default
 }
 
+function fetchUnavailableDates(postId: string): Promise<string[]> {
+  return fetch(`/api/unavailable-dates?postId=${postId}`)
+    .then((res) => res.json())
+    .then((data) => data.unavailableDates || [])
+}
+
 export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRate = 150, baseRateOverride, blockType, postId }) => {
   const effectiveBaseRate = getValidBaseRate(baseRate, baseRateOverride);
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [endDate, setEndDate] = useState<Date | null>(null)
   const [selectedDuration, setSelectedDuration] = useState(1)
   const [currentTier, setCurrentTier] = useState<PackageTier>(getValidTier(1));
+  const [unavailableDates, setUnavailableDates] = useState<string[]>([])
   const { currentUser } = useUserContext()
   const { isSubscribed } = useSubscription()
   const isCustomer = !!currentUser
@@ -126,10 +134,18 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       // Always get a valid tier
       const tier = getValidTier(diffDays)
 
+      if (diffDays < 1 || startDate >= endDate) {
+        setEndDate(null)
+      }
+
       setSelectedDuration(diffDays)
       setCurrentTier(tier)
     }
   }, [startDate, endDate])
+
+  useEffect(() => {
+    fetchUnavailableDates(postId).then((dates) => setUnavailableDates(dates))
+  }, [postId])
 
   if (blockType !== 'stayDuration') {
     return null
@@ -164,7 +180,9 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                 mode="single"
                 selected={startDate || undefined}
                 onSelect={(date) => setStartDate(date || null)}
-                disabled={(date) => date < new Date()}
+                   disabled={(date) =>
+                  date < new Date() || unavailableDates.includes(date.toISOString())
+                }
               />
             </PopoverContent>
           </Popover>
@@ -187,7 +205,12 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                 mode="single"
                 selected={endDate || undefined}
                 onSelect={(date) => setEndDate(date || null)}
-                disabled={(date) => !startDate || date <= startDate}
+                disabled={(date) =>
+                  !startDate ||
+                  date <= startDate ||
+                  unavailableDates.includes(date.toISOString()) ||
+                  hasUnavailableDateBetween(unavailableDates, startDate, date)
+                }
               />
             </PopoverContent>
           </Popover>
