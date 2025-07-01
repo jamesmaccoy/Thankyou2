@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const payload = await getPayload({ config: configPromise });
 
     let postRef = postId;
-    let baseRate = 150;
+    let baseRate = 150; // Default fallback
     let multiplier = 1;
 
     // If postId is not a valid ObjectId, look up the post by slug
@@ -61,7 +61,11 @@ export async function POST(request: Request) {
           });
         }
         postRef = post.docs[0]?.id;
-        baseRate = typeof post.docs[0]?.baseRate === 'number' ? post.docs[0]?.baseRate : 150;
+        // Use proper fallback logic - only use 150 if baseRate is null, undefined, or NaN
+        baseRate = (typeof post.docs[0]?.baseRate === 'number' && !isNaN(post.docs[0].baseRate)) 
+          ? post.docs[0].baseRate 
+          : 150;
+        console.log('Found post by slug, baseRate:', baseRate, 'from post:', post.docs[0]?.baseRate);
       } catch (postError) {
         console.error('Error finding post by slug:', postError);
         return new Response(JSON.stringify({ error: 'Error finding post' }), { 
@@ -73,8 +77,12 @@ export async function POST(request: Request) {
       // If postId is an ObjectId, fetch the post to get baseRate
       try {
         const post = await payload.findByID({ collection: 'posts', id: postId });
-        if (post && typeof post.baseRate === 'number') {
-          baseRate = post.baseRate;
+        if (post) {
+          // Use proper fallback logic - only use 150 if baseRate is null, undefined, or NaN
+          baseRate = (typeof post.baseRate === 'number' && !isNaN(post.baseRate)) 
+            ? post.baseRate 
+            : 150;
+          console.log('Found post by ID, baseRate:', baseRate, 'from post:', post.baseRate);
         }
       } catch (postError) {
         console.error('Error finding post by ID:', postError);

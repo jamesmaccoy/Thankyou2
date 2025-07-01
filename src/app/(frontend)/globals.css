@@ -93,6 +93,37 @@
   }
 }
 
+@layer utilities {
+  /* Sticky Footer Pattern Utilities */
+  .sticky-footer {
+    @apply fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-border shadow-lg;
+    @apply md:relative md:shadow-none md:border-t-0 md:bg-transparent;
+    transition: transform 0.3s ease-in-out;
+  }
+  
+  .sticky-footer-container {
+    @apply container max-w-none px-4 py-4;
+    @apply md:max-w-screen-lg md:mx-auto md:px-6;
+  }
+  
+  /* Mobile-first content spacing for sticky footers */
+  .content-with-sticky-footer {
+    @apply pb-32 md:pb-10;
+  }
+  
+  /* Dark mode support for sticky footer */
+  [data-theme='dark'] .sticky-footer {
+    @apply bg-card border-border;
+  }
+  
+  /* Prevent scroll issues on mobile */
+  .mobile-scroll-safe {
+    /* Ensure content doesn't get hidden behind mobile keyboards/toolbars */
+    min-height: calc(100vh - 6rem);
+    min-height: calc(100dvh - 6rem); /* Dynamic viewport height support */
+  }
+}
+
 html {
   opacity: 0;
 }
