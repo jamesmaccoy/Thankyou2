@@ -10,6 +10,7 @@ import { CalendarIcon } from 'lucide-react'
 import type { EstimateBlockType } from './types'
 import { useUserContext } from '@/context/UserContext'
 import { useSubscription } from '@/hooks/useSubscription'
+import { isHost } from '@/access/isAdmin'
 
 import { calculateTotal } from '@/lib/calculateTotal'
 
