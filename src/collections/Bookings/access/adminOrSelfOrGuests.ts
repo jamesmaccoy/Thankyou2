@@ -6,10 +6,12 @@ export const hostOrSelfOrGuests =
   ({ req: { user } }) => {
     if (!user) return false
 
-    if (user?.role?.includes('host')) {
+    // Admins and hosts can see all bookings
+    if (user?.role?.includes('admin') || user?.role?.includes('host')) {
       return true
     }
 
+    // Customers can see their own bookings or bookings where they are guests
     return {
       or: [
         {
