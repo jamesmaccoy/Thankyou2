@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 
 export default function SubscribePage() {
   const router = useRouter()
-  const { currentUser } = useUserContext()
+  const { currentUser, handleAuthChange } = useUserContext()
   const { customerInfo, isInitialized } = useRevenueCat()
   const { isSubscribed, isLoading } = useSubscription()
   const [offerings, setOfferings] = useState<Offering[]>([])
@@ -25,7 +25,7 @@ export default function SubscribePage() {
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
-      console.log('User already subscribed, redirecting to /host from useEffect.')
+      console.log('User already subscribed, redirecting to /bookings from useEffect.')
       router.push('/bookings')
     }
   }, [isLoading, isSubscribed, router])
@@ -54,7 +54,32 @@ export default function SubscribePage() {
       await Purchases.getSharedInstance().purchase({
         rcPackage: pkg
       })
-      router.push('/host')
+      
+      // After successful purchase, attempt to upgrade role automatically
+      try {
+        const upgradeResponse = await fetch('/api/upgrade-role', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ targetRole: 'host' }),
+        })
+        
+        if (upgradeResponse.ok) {
+          // Role upgrade succeeded, refresh user context
+          await handleAuthChange()
+          console.log('Role upgrade successful after purchase')
+        } else {
+          console.log('Role upgrade failed or not yet ready, user can upgrade later')
+        }
+      } catch (upgradeError) {
+        console.log('Role upgrade attempt failed, user can upgrade later:', upgradeError)
+        // Don't show error to user - they can upgrade manually later
+      }
+      
+      // Redirect to admin page which accepts both customer and host roles
+      router.push('/plek/adminPage')
     } catch (purchaseError) {
       const rcError = purchaseError as PurchasesError
       console.error('RevenueCat Purchase Error (Full Object):', rcError)

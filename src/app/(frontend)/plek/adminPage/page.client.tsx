@@ -24,6 +24,7 @@ import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
 import { toast } from 'sonner'
 import { PACKAGE_TYPES, getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { RoleUpgrade } from '@/components/RoleUpgrade'
 
 interface PlekAdminClientProps {
   user: User
@@ -1110,6 +1111,11 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
             </PopoverContent>
           </Popover>
         </div>
+      </div>
+
+      {/* Role Upgrade Section for customers who need to upgrade */}
+      <div className="mb-8">
+        <RoleUpgrade />
       </div>
 
       {/* Alerts */}
