@@ -38,7 +38,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Check if user has an active subscription with RevenueCat
+    const currentRoles = user.role || []
+
+    // Check if user has any subscription-based roles to downgrade
+    if (!currentRoles.includes('customer') && !currentRoles.includes('host')) {
+      return NextResponse.json({ 
+        message: 'User has no subscription-based roles to downgrade',
+        currentRoles: currentRoles
+      })
+    }
+
+    // Check subscription status with RevenueCat
     try {
       const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
       if (!apiKey) {
@@ -50,68 +60,28 @@ export async function POST(request: NextRequest) {
       const purchases = Purchases.configure(apiKey, userId)
       const customerInfo = await purchases.getCustomerInfo()
       
-      // Check for active entitlements and subscription products
+      // Check for active entitlements
       const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
       const hasActiveSubscription = activeEntitlements.length > 0
 
-      if (!hasActiveSubscription) {
+      if (hasActiveSubscription) {
         return NextResponse.json({ 
-          error: 'Active subscription required to upgrade role',
-          hasSubscription: false,
-          activeEntitlements: activeEntitlements
-        }, { status: 403 })
-      }
-
-      // Determine the appropriate role based on subscription type
-      let targetRole: UserRole = 'customer' // Default for monthly/annual subscriptions
-      
-      // Check active entitlements for subscription types
-      for (const entitlementKey of activeEntitlements) {
-        const entitlement = customerInfo.entitlements.active[entitlementKey]
-        if (entitlement && entitlement.productIdentifier) {
-          // Professional plan gets host access
-          if (entitlement.productIdentifier.includes('six_month') || 
-              entitlement.productIdentifier.includes('professional') ||
-              entitlement.productIdentifier === '$rc_six_month') {
-            targetRole = 'host'
-            break
-          }
-        }
-      }
-
-      // Check if user already has the appropriate role or higher
-      const currentRoles = user.role || []
-      if (targetRole === 'customer' && (currentRoles.includes('customer') || currentRoles.includes('host'))) {
-        return NextResponse.json({ 
-          message: `User already has ${targetRole} role or higher`,
-          currentRoles: user.role,
-          targetRole: targetRole
-        })
-      }
-      if (targetRole === 'host' && currentRoles.includes('host')) {
-        return NextResponse.json({ 
-          message: `User already has ${targetRole} role`,
-          currentRoles: user.role,
-          targetRole: targetRole
+          message: 'User still has active subscription, no downgrade needed',
+          hasActiveSubscription: true,
+          activeEntitlements: activeEntitlements,
+          currentRoles: currentRoles
         })
       }
 
-      // Update user role
+      // User has no active subscription, proceed with downgrade
       let newRoles = [...currentRoles]
-
-      // Remove guest role if present
-      if (newRoles.includes('guest')) {
-        newRoles = newRoles.filter(role => role !== 'guest')
-      }
       
-      // Add the target role if not already present
-      if (!newRoles.includes(targetRole)) {
-        newRoles.push(targetRole)
-      }
-
-      // For host upgrades, also ensure customer role is present
-      if (targetRole === 'host' && !newRoles.includes('customer')) {
-        newRoles.push('customer')
+      // Remove subscription-based roles
+      newRoles = newRoles.filter(role => role !== 'customer' && role !== 'host')
+      
+      // Ensure user has at least guest role
+      if (newRoles.length === 0 || !newRoles.includes('guest')) {
+        newRoles.push('guest')
       }
 
       // Update the user in the database
@@ -125,11 +95,10 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Successfully upgraded to ${targetRole} role`,
-        previousRoles: user.role,
+        message: 'Successfully downgraded user role due to expired subscription',
+        previousRoles: currentRoles,
         newRoles: updatedUser.role,
-        targetRole: targetRole,
-        hasActiveSubscription: true,
+        hasActiveSubscription: false,
         activeEntitlements: activeEntitlements
       })
 
@@ -142,7 +111,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Role upgrade error:', error)
+    console.error('Role downgrade error:', error)
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'

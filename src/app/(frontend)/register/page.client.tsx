@@ -104,18 +104,9 @@ export default function RegisterPage() {
             autoComplete="new-password"
             {...form.register('password')}
           />
-          <Select
-            onValueChange={(value) => form.setValue('role', value)}
-            defaultValue={form.getValues('role')}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select user account type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="guest">Guest</SelectItem>
-              <SelectItem value="customer">Customer</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
+            ℹ️ New accounts start as guest users. Subscribe to unlock customer or host features.
+          </div>
 
           <Button className="w-full" type="submit">
             Register

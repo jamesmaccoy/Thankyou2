@@ -10,11 +10,18 @@ const Users: CollectionConfig = {
   },
   hooks: {
     beforeChange: [
-      ({ data, operation }) => {
+      ({ data, operation, req }) => {
         // Ensure new users get guest role if no role is provided
         if (operation === 'create' && (!data.role || data.role.length === 0)) {
           data.role = ['guest']
         }
+        
+        // Prevent non-admin users from setting admin, customer, or host roles during registration
+        if (operation === 'create' && !req.user) {
+          // This is a registration (no authenticated user)
+          data.role = ['guest']
+        }
+        
         return data
       },
     ],
@@ -38,7 +45,7 @@ const Users: CollectionConfig = {
       // Non-authenticated users can't see any users
       return false
     },
-    create: () => true,
+    create: () => true, // Allow user registration
     update: ({ req: { user }, id }) => {
       if (!user) return false
       if (user?.role?.includes('admin')) return true
@@ -83,8 +90,12 @@ const Users: CollectionConfig = {
       ],
       access: {
         create: ({ req: { user } }) => {
-          // Allow setting role during registration (when user is null) or by admin
-          return !user || user?.role?.includes('admin') || false
+          // During registration (when user is null), only allow guest role
+          // Admins can set any role
+          if (!user) {
+            return false // Prevent role setting during registration
+          }
+          return user?.role?.includes('admin') || false
         },
         update: ({ req: { user } }) => {
           return user?.role?.includes('admin') || false
