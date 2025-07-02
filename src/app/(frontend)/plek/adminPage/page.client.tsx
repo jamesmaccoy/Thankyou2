@@ -23,7 +23,7 @@ import Image from 'next/image'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
 import { toast } from 'sonner'
-import { PACKAGE_TYPES, getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { PACKAGE_TYPES, getPackageById, getAllPackageTypes, getPackageIconComponent } from '@/lib/package-types'
 import { RoleUpgrade } from '@/components/RoleUpgrade'
 
 interface PlekAdminClientProps {
@@ -2049,19 +2049,22 @@ function PostForm({
           <div className="p-4 border rounded-lg bg-muted/50">
             <p className="text-sm font-medium mb-2">Quick Add Templates:</p>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => (
-                <Button
-                  key={key}
-                  type="button"
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => onAddPackageTemplate(key)}
-                  className="gap-1"
-                >
-                  <Package className="h-3 w-3" />
-                  {template.name}
-                </Button>
-              ))}
+              {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => {
+                const PackageIcon = getPackageIconComponent(key)
+                return (
+                  <Button
+                    key={key}
+                    type="button"
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => onAddPackageTemplate(key)}
+                    className="gap-1"
+                  >
+                    <PackageIcon className="h-3 w-3" />
+                    {template.name}
+                  </Button>
+                )
+              })}
             </div>
           </div>
 

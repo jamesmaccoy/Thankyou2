@@ -39,7 +39,7 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
           href="/plek/adminPage" 
           className={buttonVariants({ variant: "link" })}
         >
-          Manage Pleks
+          Manage
         </Link>
       )}
       

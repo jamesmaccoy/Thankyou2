@@ -114,6 +114,7 @@ export default async function Bookings() {
       meta: post?.meta,
       type: 'booking' as const,
       customer: booking.customer,
+      packageType: booking.packageType,
     }
   })
 
@@ -130,8 +131,22 @@ export default async function Bookings() {
       meta: post?.meta,
       type: 'estimate' as const,
       customer: estimate.customer,
+      packageType: estimate.packageType,
     }
   })
+
+  // Filter past bookings/estimates (where toDate is before today)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0) // Reset to start of day for accurate comparison
+  
+  const pastBookings = formattedBookings.filter(booking => new Date(booking.toDate) < today)
+  const currentBookings = formattedBookings.filter(booking => new Date(booking.toDate) >= today)
+  
+  const pastEstimates = formattedEstimates.filter(estimate => new Date(estimate.toDate) < today)
+  const currentEstimates = formattedEstimates.filter(estimate => new Date(estimate.toDate) >= today)
+  
+  const allPastItems = [...pastBookings, ...pastEstimates]
+  const allCurrentItems = [...currentBookings, ...currentEstimates]
 
   // Calculate package statistics
   const allItems = [...bookings.docs, ...estimates.docs]
@@ -263,15 +278,16 @@ export default async function Bookings() {
           </div>
         ) : (
           <Tabs defaultValue="all" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="all">All ({formattedBookings.length + formattedEstimates.length})</TabsTrigger>
-              <TabsTrigger value="bookings">Bookings ({formattedBookings.length})</TabsTrigger>
-              <TabsTrigger value="estimates">Estimates ({formattedEstimates.length})</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="all">All ({allCurrentItems.length + allPastItems.length})</TabsTrigger>
+              <TabsTrigger value="bookings">Bookings ({currentBookings.length})</TabsTrigger>
+              <TabsTrigger value="estimates">Estimates ({currentEstimates.length})</TabsTrigger>
+              <TabsTrigger value="past">Past ({allPastItems.length})</TabsTrigger>
             </TabsList>
             
             <TabsContent value="all" className="space-y-6 mt-6">
               <div className="grid gap-6">
-                {[...formattedBookings, ...formattedEstimates]
+                {[...allCurrentItems, ...allPastItems]
                   .sort((a, b) => new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime())
                   .map((item) => (
                     <BookingCard key={`${item.type}-${item.id}`} booking={item} />
@@ -281,7 +297,7 @@ export default async function Bookings() {
             
             <TabsContent value="bookings" className="space-y-6 mt-6">
               <div className="grid gap-6">
-                {formattedBookings.map((booking) => (
+                {currentBookings.map((booking) => (
                   <BookingCard key={booking.id} booking={booking} />
                 ))}
               </div>
@@ -289,9 +305,19 @@ export default async function Bookings() {
             
             <TabsContent value="estimates" className="space-y-6 mt-6">
               <div className="grid gap-6">
-                {formattedEstimates.map((estimate) => (
+                {currentEstimates.map((estimate) => (
                   <BookingCard key={estimate.id} booking={estimate} />
                 ))}
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="past" className="space-y-6 mt-6">
+              <div className="grid gap-6">
+                {allPastItems
+                  .sort((a, b) => new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime())
+                  .map((item) => (
+                    <BookingCard key={`${item.type}-${item.id}`} booking={item} />
+                  ))}
               </div>
             </TabsContent>
           </Tabs>

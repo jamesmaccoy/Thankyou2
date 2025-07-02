@@ -6,6 +6,7 @@ import React, { FC } from 'react'
 import { Media } from '../Media'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Badge } from '../ui/badge'
+import { getPackageById, getPackageIconComponent } from '@/lib/package-types'
 
 type Props = {
   booking: {
@@ -23,12 +24,18 @@ type Props = {
       | undefined
     type?: 'booking' | 'estimate'
     customer?: (string | User) | null | undefined
+    packageType?: string | null | undefined
   }
 }
 
 const BookingCard: FC<Props> = ({ booking }) => {
   const isEstimate = booking.type === 'estimate'
   const linkPath = isEstimate ? `/estimate/${booking.id}` : `/bookings/${booking.id}`
+  
+  // Check if booking is in the past
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const isPast = new Date(booking.toDate) < today
   
   // Count accepted guests (excluding customer)
   const acceptedGuests = booking.guests?.filter(Boolean) || []
@@ -62,11 +69,18 @@ const BookingCard: FC<Props> = ({ booking }) => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <CardTitle className="text-xl">{booking.title}</CardTitle>
-              {isEstimate && (
-                <Badge variant="outline" className="text-xs">
-                  Estimate
-                </Badge>
-              )}
+              <div className="flex gap-2">
+                {isEstimate && (
+                  <Badge variant="outline" className="text-xs">
+                    Estimate
+                  </Badge>
+                )}
+                {isPast && (
+                  <Badge variant="secondary" className="text-xs">
+                    Past
+                  </Badge>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -86,6 +100,24 @@ const BookingCard: FC<Props> = ({ booking }) => {
                     {hasMoreGuests && ` +${acceptedGuests.length - 2} more`}
                     {acceptedGuests.length === 1 ? ' has' : ' have'} joined
                   </div>
+                </div>
+              )}
+              
+              {/* Package information */}
+              {booking.packageType && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  {(() => {
+                    const PackageIcon = getPackageIconComponent(booking.packageType)
+                    const packageInfo = getPackageById(booking.packageType)
+                    return (
+                      <>
+                        <PackageIcon className="size-4" />
+                        <div className="text-sm">
+                          {packageInfo?.name || booking.packageType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </div>
+                      </>
+                    )
+                  })()}
                 </div>
               )}
               

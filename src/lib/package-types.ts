@@ -1,3 +1,34 @@
+import React from 'react'
+import { 
+  Camera, 
+  Crown, 
+  CalendarDays, 
+  UserCheck, 
+  CalendarRange, 
+  Calendar, 
+  Wine, 
+  Package as PackageIcon,
+  LucideIcon
+} from 'lucide-react'
+
+// Icon mapping for package types
+const ICON_MAP: Record<string, LucideIcon> = {
+  camera: Camera,
+  crown: Crown,
+  'calendar-days': CalendarDays,
+  'user-check': UserCheck,
+  'calendar-range': CalendarRange,
+  calendar: Calendar,
+  wine: Wine,
+  package: PackageIcon,
+}
+
+// Get icon component for a package type
+export const getPackageIconComponent = (packageTypeId: string): LucideIcon => {
+  const iconName = getPackageIcon(packageTypeId)
+  return ICON_MAP[iconName] || PackageIcon
+}
+
 export interface PackageType {
   id: string
   name: string
@@ -9,6 +40,7 @@ export interface PackageType {
   maxNights?: number
   isHosted?: boolean
   category: 'standard' | 'luxury' | 'hosted' | 'specialty'
+  icon: string // Lucide icon name
 }
 
 export interface PackageTypeTemplate {
@@ -21,6 +53,7 @@ export interface PackageTypeTemplate {
   maxNights?: number
   isHosted?: boolean
   category: 'standard' | 'luxury' | 'hosted' | 'specialty'
+  icon: string // Lucide icon name
 }
 
 // Centralized package types definition based on Plek's core offerings
@@ -39,7 +72,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "per_night",
     minNights: 1,
     maxNights: 1,
-    category: 'standard'
+    category: 'standard',
+    icon: 'camera'
   },
 
   // Luxury Packages
@@ -59,7 +93,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 1,
     maxNights: 1,
     isHosted: true,
-    category: 'luxury'
+    category: 'luxury',
+    icon: 'crown'
   },
 
   // Multi-night Packages
@@ -77,7 +112,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "3nights",
     minNights: 3,
     maxNights: 3,
-    category: 'standard'
+    category: 'standard',
+    icon: 'calendar-days'
   },
 
   hosted_3nights: {
@@ -97,7 +133,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 3,
     maxNights: 3,
     isHosted: true,
-    category: 'hosted'
+    category: 'hosted',
+    icon: 'user-check'
   },
 
   // Weekly Packages
@@ -116,7 +153,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "Weekly",
     minNights: 7,
     maxNights: 7,
-    category: 'standard'
+    category: 'standard',
+    icon: 'calendar-range'
   },
 
   hosted_weekly: {
@@ -137,7 +175,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 7,
     maxNights: 7,
     isHosted: true,
-    category: 'hosted'
+    category: 'hosted',
+    icon: 'user-check'
   },
 
   // Extended Stay Packages
@@ -158,7 +197,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "monthly",
     minNights: 30,
     maxNights: 90,
-    category: 'standard'
+    category: 'standard',
+    icon: 'calendar'
   },
 
   // Specialty Packages
@@ -175,7 +215,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
       "Wine education sessions"
     ],
     revenueCatId: "Bottle_wine",
-    category: 'specialty'
+    category: 'specialty',
+    icon: 'wine'
   }
 } as const
 
@@ -230,4 +271,10 @@ export const getAllPackageTypes = (): Record<string, PackageType> => {
       createPackageFromTemplate(id, template)
     ])
   )
+}
+
+// Get icon name for a package type
+export const getPackageIcon = (packageTypeId: string): string => {
+  const packageType = getPackageById(packageTypeId)
+  return packageType?.icon || 'package'
 } 
