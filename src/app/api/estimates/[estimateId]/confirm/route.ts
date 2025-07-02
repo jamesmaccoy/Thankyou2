@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
+import { Purchases } from '@revenuecat/purchases-js'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ estimateId: string }> }) {
   try {
@@ -53,18 +54,107 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ est
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
+    // Extract the new packageType from the request body
+    const newPackageType = body.packageType || estimate.packageType || 'standard'
+    
+    console.log('Estimate confirmation data:', {
+      estimateId,
+      oldPackageType: estimate.packageType,
+      newPackageType: newPackageType,
+      requestBody: body
+    })
+
+    // Check if payment verification is required
+    let paymentVerified = false
+    
+    // If RevenueCat purchase result is provided, verify it
+    if (body.revenueCatPurchaseResult) {
+      console.log('Verifying RevenueCat purchase for user:', user.id)
+      
+      try {
+        // Initialize RevenueCat with the public API key
+        const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+        if (!apiKey) {
+          console.error('RevenueCat API key missing')
+          return NextResponse.json({ 
+            error: 'Payment verification configuration missing' 
+          }, { status: 500 })
+        }
+
+        // Configure RevenueCat and get customer info to verify the purchase
+        const purchases = Purchases.configure(apiKey, String(user.id))
+        const customerInfo = await purchases.getCustomerInfo()
+        
+        console.log('Customer info retrieved:', {
+          customerId: customerInfo.originalAppUserId,
+          activeEntitlements: Object.keys(customerInfo.entitlements.active || {}),
+          nonSubscriptionTransactions: customerInfo.nonSubscriptionTransactions?.length || 0
+        })
+
+        // Check if the user has recent transactions that match the package type
+        const hasRecentPurchase = customerInfo.nonSubscriptionTransactions?.some((transaction: any) => {
+          // Check if transaction is recent (within last 5 minutes to account for processing delays)
+          const transactionDate = new Date(transaction.purchaseDate)
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+          const isRecent = transactionDate > fiveMinutesAgo
+          
+          console.log('Checking transaction:', {
+            productId: transaction.productId,
+            purchaseDate: transaction.purchaseDate,
+            isRecent,
+            packageType: newPackageType
+          })
+          
+          return isRecent && !transaction.isRefunded
+        })
+
+        // Also check for active entitlements (for subscription-based packages)
+        const hasActiveEntitlements = Object.keys(customerInfo.entitlements.active || {}).length > 0
+
+        if (hasRecentPurchase || hasActiveEntitlements) {
+          paymentVerified = true
+          console.log('Payment verified successfully')
+        } else {
+          console.warn('No recent purchases or active entitlements found')
+          return NextResponse.json({ 
+            error: 'Payment verification failed. No recent purchase found for this package.' 
+          }, { status: 400 })
+        }
+
+      } catch (revenueCatError) {
+        console.error('RevenueCat verification error:', revenueCatError)
+        return NextResponse.json({ 
+          error: 'Payment verification failed',
+          details: revenueCatError instanceof Error ? revenueCatError.message : 'Unknown error'
+        }, { status: 500 })
+      }
+    } else {
+      // No RevenueCat purchase result provided - check if this package type requires payment
+      console.log('No RevenueCat purchase result provided, checking if payment is required for package:', newPackageType)
+      
+      // Define which package types don't require RevenueCat payment
+      const freePackageTypes = ['standard', 'basic'] // Add package types that don't require payment
+      
+      if (freePackageTypes.includes(newPackageType)) {
+        paymentVerified = true
+        console.log('Package type does not require payment verification')
+      } else {
+        console.warn('Package type requires payment but no purchase result provided')
+        return NextResponse.json({ 
+          error: 'Payment required for this package type' 
+        }, { status: 400 })
+      }
+    }
+
+    // Only proceed if payment is verified
+    if (!paymentVerified) {
+      return NextResponse.json({ 
+        error: 'Payment verification required' 
+      }, { status: 400 })
+    }
+
     // Update the estimate to mark it as confirmed/paid
     try {
-      // Extract the new packageType from the request body
-      const newPackageType = body.packageType || estimate.packageType || 'standard'
-      
-      console.log('Estimate confirmation data:', {
-        estimateId,
-        oldPackageType: estimate.packageType,
-        newPackageType: newPackageType,
-        requestBody: body
-      })
-
       const updatedEstimate = await payload.update({
         collection: 'estimates',
         id: estimateId,

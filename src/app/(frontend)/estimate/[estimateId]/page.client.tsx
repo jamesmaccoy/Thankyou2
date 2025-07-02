@@ -116,6 +116,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const [selectedDuration, setSelectedDuration] = useState<number>(typeof _bookingDuration === 'number' ? _bookingDuration : 1)
   const [isWineSelected, setIsWineSelected] = useState(false)
   const [packagePrice, setPackagePrice] = useState<number | null>(null)
+  const [hasUserSelectedPackage, setHasUserSelectedPackage] = useState(false) // Track manual selection
 
   // Add state for date range selection
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -311,16 +312,26 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     const availablePackages = getFilteredPackages()
     const bestPackage = getBestPackageForDuration(selectedDuration, availablePackages)
     
-    if (bestPackage && bestPackage !== selectedPackage) {
-      console.log(`Auto-selecting package ${bestPackage} for duration ${selectedDuration}`)
-      setSelectedPackage(bestPackage)
-    } else if (!selectedPackage && Object.keys(availablePackages).length > 0) {
-      // Fallback to first available if no best match
-      const firstPackageKey = Object.keys(availablePackages)[0]
-      console.log(`Fallback selecting first available package: ${firstPackageKey}`)
-      setSelectedPackage(firstPackageKey || null)
+    // Only auto-select if user hasn't made a manual selection
+    if (!hasUserSelectedPackage) {
+      if (bestPackage && bestPackage !== selectedPackage) {
+        console.log(`Auto-selecting package ${bestPackage} for duration ${selectedDuration}`)
+        setSelectedPackage(bestPackage)
+      } else if (!selectedPackage && Object.keys(availablePackages).length > 0) {
+        // Fallback to first available if no best match
+        const firstPackageKey = Object.keys(availablePackages)[0]
+        console.log(`Fallback selecting first available package: ${firstPackageKey}`)
+        setSelectedPackage(firstPackageKey || null)
+      }
+    } else {
+      // If user has selected a package, check if it's still available
+      if (selectedPackage && !availablePackages[selectedPackage]) {
+        console.log(`User-selected package ${selectedPackage} no longer available, auto-selecting best alternative`)
+        setSelectedPackage(bestPackage)
+        setHasUserSelectedPackage(false) // Reset manual selection flag
+      }
     }
-  }, [selectedDuration, packageDetails]) // Depend on both duration and package details
+  }, [selectedDuration, packageDetails, hasUserSelectedPackage, selectedPackage]) // Include hasUserSelectedPackage in dependencies
 
   // Load RevenueCat offerings when initialized
   useEffect(() => {
@@ -378,6 +389,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
 
   const handlePackageSelect = (packageId: string) => {
     setSelectedPackage(packageId)
+    setHasUserSelectedPackage(true) // Mark that user has made a manual selection
     const selectedPkg = packageDetails[packageId]
     if (selectedPkg) {
       // Use the package's price (which is either the package's custom price or post's baseRate)
