@@ -8,7 +8,9 @@ import {
   Calendar, 
   Wine, 
   Package as PackageIcon,
-  LucideIcon
+  LucideIcon,
+  Star,
+  Briefcase
 } from 'lucide-react'
 
 // Icon mapping for package types
@@ -21,6 +23,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   calendar: Calendar,
   wine: Wine,
   package: PackageIcon,
+  star: Star,
+  briefcase: Briefcase
 }
 
 // Get icon component for a package type
@@ -179,7 +183,94 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     icon: 'user-check'
   },
 
-  // Extended Stay Packages
+  // Specialty Packages
+  wine_package: {
+    name: "Wine Sommelier Package",
+    description: "Specialized wine experience add-on for any stay",
+    multiplier: 1.5,
+    features: [
+      "Professional wine sommelier",
+      "Curated wine selection",
+      "Daily wine tastings",
+      "Wine pairing consultation",
+      "Premium glassware provided",
+      "Wine education sessions"
+    ],
+    revenueCatId: "Bottle_wine",
+    category: 'specialty',
+    icon: 'wine'
+  },
+
+  // Customer (Paid) Packages - Enhanced versions with premium features
+  per_night_customer: {
+    name: "Per Night Pro",
+    description: "Enhanced nightly experience with priority support and premium amenities",
+    multiplier: 1.0,
+    features: [
+      "Photo studio access",
+      "Premium lighting equipment",
+      "Priority booking support",
+      "24/7 customer service",
+      "Enhanced cleaning service",
+      "Welcome package included",
+      "Free cancellation up to 24h",
+      "Equipment setup assistance"
+    ],
+    revenueCatId: "per_night_pro",
+    minNights: 1,
+    maxNights: 1,
+    category: 'standard',
+    icon: 'star'
+  },
+
+  three_nights_customer: {
+    name: "3 Nights Pro Package",
+    description: "Enhanced three-night experience with premium support and exclusive perks",
+    multiplier: 0.95,
+    features: [
+      "3 nights accommodation",
+      "Premium photo studio access",
+      "Professional equipment included",
+      "5% discount on total",
+      "Priority customer support",
+      "Daily housekeeping",
+      "Concierge service",
+      "Welcome amenities package",
+      "Free equipment tutorials",
+      "Flexible check-in/out times"
+    ],
+    revenueCatId: "3nights_pro",
+    minNights: 3,
+    maxNights: 3,
+    category: 'standard',
+    icon: 'crown'
+  },
+
+  weekly_customer: {
+    name: "Weekly Pro Package",
+    description: "Premium week-long experience with dedicated support and enhanced amenities",
+    multiplier: 0.85,
+    features: [
+      "7 nights accommodation",
+      "Extended photo studio access",
+      "Professional equipment storage",
+      "15% discount on total",
+      "Dedicated account manager",
+      "Daily housekeeping service",
+      "Priority booking for future stays",
+      "Equipment maintenance included",
+      "Professional consultation sessions",
+      "Enhanced workspace setup",
+      "Complimentary local experiences"
+    ],
+    revenueCatId: "weekly_pro",
+    minNights: 7,
+    maxNights: 7,
+    category: 'standard',
+    icon: 'briefcase'
+  },
+
+  // Monthly Packages
   monthly: {
     name: "Monthly Package",
     description: "Extended month-long stay with winter benefits",
@@ -199,24 +290,6 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     maxNights: 90,
     category: 'standard',
     icon: 'calendar'
-  },
-
-  // Specialty Packages
-  wine_package: {
-    name: "Wine Sommelier Package",
-    description: "Specialized wine experience add-on for any stay",
-    multiplier: 1.5,
-    features: [
-      "Professional wine sommelier",
-      "Curated wine selection",
-      "Daily wine tastings",
-      "Wine pairing consultation",
-      "Premium glassware provided",
-      "Wine education sessions"
-    ],
-    revenueCatId: "Bottle_wine",
-    category: 'specialty',
-    icon: 'wine'
   }
 } as const
 

@@ -270,10 +270,10 @@ export default async function Bookings() {
           <div className="text-center py-12">
             <h2 className="text-2xl font-semibold mb-4">No bookings or estimates yet</h2>
             <p className="text-muted-foreground mb-6">
-              Explore our properties and make your first booking.
+              Explore our pleks and make your first booking.
             </p>
             <Link href="/explore">
-              <Button>Explore Properties</Button>
+              <Button>Explore</Button>
             </Link>
           </div>
         ) : (

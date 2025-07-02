@@ -310,8 +310,11 @@ export interface Post {
               | 'hosted_3nights'
               | 'weekly'
               | 'hosted_weekly'
-              | 'monthly'
               | 'wine_package'
+              | 'per_night_customer'
+              | 'three_nights_customer'
+              | 'weekly_customer'
+              | 'monthly'
             )
           | null;
         /**

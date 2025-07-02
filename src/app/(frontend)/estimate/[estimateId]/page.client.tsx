@@ -37,6 +37,50 @@ interface EnhancedPackageDetails {
   availableSeasons: string[]
 }
 
+// Helper functions for package tier identification
+const getPackageTier = (packageId: string): 'free' | 'premium' | 'luxury' => {
+  const freePackages = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package']
+  const premiumPackages = ['per_night_customer', 'three_nights_customer', 'weekly_customer']
+  const luxuryPackages = ['luxury_night', 'hosted_3nights', 'hosted_weekly']
+  
+  if (freePackages.includes(packageId)) return 'free'
+  if (premiumPackages.includes(packageId)) return 'premium'
+  if (luxuryPackages.includes(packageId)) return 'luxury'
+  return 'free' // Default to free for unknown packages
+}
+
+const getTierBadgeInfo = (tier: 'free' | 'premium' | 'luxury') => {
+  switch (tier) {
+    case 'free':
+      return { 
+        label: 'Standard', 
+        className: 'bg-gray-100 text-gray-700 border-gray-300',
+        icon: '✨'
+      }
+    case 'premium':
+      return { 
+        label: 'Enhanced', 
+        className: 'bg-blue-100 text-blue-700 border-blue-300',
+        icon: '⭐'
+      }
+    case 'luxury':
+      return { 
+        label: 'Premium', 
+        className: 'bg-purple-100 text-purple-700 border-purple-300',
+        icon: '👑'
+      }
+  }
+}
+
+const getUpgradeSuggestion = (packageId: string): string | null => {
+  const upgradeMap: Record<string, string> = {
+    'per_night': 'per_night_customer',
+    'three_nights': 'three_nights_customer', 
+    'weekly': 'weekly_customer'
+  }
+  return upgradeMap[packageId] || null
+}
+
 interface RevenueCatError extends Error {
   code?: ErrorCode;
 }
@@ -117,6 +161,8 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const [isWineSelected, setIsWineSelected] = useState(false)
   const [packagePrice, setPackagePrice] = useState<number | null>(null)
   const [hasUserSelectedPackage, setHasUserSelectedPackage] = useState(false) // Track manual selection
+  const [userHasSubscription, setUserHasSubscription] = useState<boolean>(false)
+  const [subscriptionCheckLoading, setSubscriptionCheckLoading] = useState<boolean>(true)
 
   // Add state for date range selection
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -124,7 +170,25 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     to: data?.toDate ? new Date(data.toDate) : undefined,
   })
 
-  // Filter packages based on duration and season
+  // Helper function to get the appropriate package based on subscription status
+  const getPackageForUser = (basePackageId: string, hasSubscription: boolean): string => {
+    // Map free packages to their enhanced versions for subscribers
+    const packageUpgradeMap: Record<string, string> = {
+      'per_night': 'per_night_customer',
+      'three_nights': 'three_nights_customer',
+      'weekly': 'weekly_customer'
+    }
+    
+    // If user has subscription and there's an enhanced version, return it
+    if (hasSubscription && packageUpgradeMap[basePackageId]) {
+      return packageUpgradeMap[basePackageId]
+    }
+    
+    // Otherwise return the base package
+    return basePackageId
+  }
+
+  // Filter packages based on duration, season, and user subscription status
   const getFilteredPackages = (): Record<string, EnhancedPackageDetails> => {
     const allPackages = getPackageDetails()
     const currentDate = new Date()
@@ -140,30 +204,49 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     
     const currentSeason = getCurrentSeason()
     
-    return Object.fromEntries(
-      Object.entries(allPackages).filter(([key, pkg]) => {
-        // Type assertion for pkg
-        const packageInfo = pkg as EnhancedPackageDetails
-        
-        // Exclude add-on packages (like wine_package) from main package selection
-        if (key === 'wine_package' || packageInfo.id === 'wine_package') {
-          return false
-        }
-        
-        // Filter by duration - use fallback values if minNights/maxNights not defined
-        const minNights = packageInfo.minNights || 1
-        const maxNights = packageInfo.maxNights || 365
-        const withinDuration = selectedDuration >= minNights && selectedDuration <= maxNights
-        
-        // Filter by season (if package has season restrictions)
-        const seasonMatch = packageInfo.availableSeasons.includes('all') || 
-                           packageInfo.availableSeasons.includes(currentSeason)
-        
-        console.log(`Package ${key}: duration ${selectedDuration} vs ${minNights}-${maxNights}, within: ${withinDuration}, season: ${seasonMatch}`)
-        
-        return withinDuration && seasonMatch
-      })
-    )
+    // Define base packages that should be offered
+    const basePackages = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package', 'luxury_night', 'hosted_3nights', 'hosted_weekly']
+    
+    const filteredPackages: Record<string, EnhancedPackageDetails> = {}
+    
+    basePackages.forEach(basePackageId => {
+      // Get the appropriate package for this user (enhanced if subscriber, basic if not)
+      const userPackageId = getPackageForUser(basePackageId, userHasSubscription)
+      let packageInfo = allPackages[userPackageId]
+      
+      // If the enhanced package doesn't exist, fall back to the base package
+      if (!packageInfo && userPackageId !== basePackageId) {
+        console.warn(`Enhanced package ${userPackageId} not found, falling back to ${basePackageId}`)
+        packageInfo = allPackages[basePackageId]
+      }
+      
+      if (!packageInfo) {
+        console.warn(`Package ${basePackageId} not found, skipping`)
+        return // Skip if package doesn't exist
+      }
+      
+      // Skip wine package from main selection
+      if (basePackageId === 'wine_package') return
+      
+      // Filter by duration
+      const minNights = packageInfo.minNights || 1
+      const maxNights = packageInfo.maxNights || 365
+      const withinDuration = selectedDuration >= minNights && selectedDuration <= maxNights
+      
+      // Filter by season
+      const seasonMatch = packageInfo.availableSeasons.includes('all') || 
+                         packageInfo.availableSeasons.includes(currentSeason)
+      
+      if (withinDuration && seasonMatch) {
+        // Use the actual package we found (might be fallback)
+        const actualPackageId = packageInfo.id || (userPackageId !== basePackageId && allPackages[basePackageId] ? basePackageId : userPackageId)
+        filteredPackages[actualPackageId] = packageInfo
+      }
+      
+      console.log(`Package ${basePackageId} -> ${userPackageId}: duration ${selectedDuration} vs ${minNights}-${maxNights}, within: ${withinDuration}, season: ${seasonMatch}`)
+    })
+    
+    return filteredPackages
   }
 
   // Get packages from the centralized system with proper post integration
@@ -337,6 +420,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   useEffect(() => {
     if (isInitialized) {
       loadOfferings()
+      checkSubscriptionStatus()
     }
   }, [isInitialized])
 
@@ -384,6 +468,29 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
       setOfferings([])
     } finally {
       setLoadingOfferings(false)
+    }
+  }
+
+  const checkSubscriptionStatus = async () => {
+    try {
+      if (!isInitialized) {
+        console.warn('RevenueCat not initialized, defaulting to free tier')
+        setUserHasSubscription(false)
+        return
+      }
+
+      const customerInfo = await Purchases.getSharedInstance().getCustomerInfo()
+      const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+      const hasActiveSubscription = activeEntitlements.length > 0
+      
+      setUserHasSubscription(hasActiveSubscription)
+      console.log('User subscription status:', { 
+        hasSubscription: hasActiveSubscription, 
+        entitlements: activeEntitlements 
+      })
+    } catch (error) {
+      console.error('Error checking subscription status:', error)
+      setUserHasSubscription(false)
     }
   }
 
@@ -618,7 +725,24 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         if (!response.ok) {
           const errorData = await response.json()
           console.error('Estimate confirmation error:', errorData)
-          throw new Error(errorData.error || 'Failed to confirm estimate')
+          
+          // Handle different types of errors with appropriate messaging
+          if (response.status === 403 && errorData.requiresSubscription) {
+            // Subscription required for enhanced packages
+            throw new Error(`${errorData.error} Click here to view subscription options.`)
+          } else if (response.status === 402 && errorData.requiresPayment) {
+            // Individual payment required for premium packages
+            throw new Error(`${errorData.error} Premium packages require individual purchase.`)
+          } else if (errorData.requiresSubscription) {
+            // Generic subscription required error
+            throw new Error(errorData.error || 'This package requires an active subscription.')
+          } else if (errorData.requiresPayment) {
+            // Generic payment required error
+            throw new Error(errorData.error || 'This package requires payment to proceed.')
+          } else {
+            // Other errors
+            throw new Error(errorData.error || 'Failed to confirm estimate')
+          }
         }
         
         const result = await response.json()
@@ -772,7 +896,14 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           {/* --- Package Selection --- */}
           <div className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">Choose Your Package</h2>
-            <p className="text-muted-foreground mb-6">Select the package that best fits your stay duration and needs</p>
+            <p className="text-muted-foreground mb-6">
+              Select the package that best fits your stay duration and needs
+              {userHasSubscription && (
+                <span className="ml-2 text-blue-600 font-medium">
+                  ✨ Enhanced packages available with your subscription
+                </span>
+              )}
+            </p>
             
             {/* Package Filter Info */}
             {getPackageFilterInfo() && (
@@ -792,6 +923,8 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 const pkg = packageInfo as EnhancedPackageDetails
                 
                 const isSelected = selectedPackage === packageId
+                const packageTier = getPackageTier(packageId)
+                const tierBadge = getTierBadgeInfo(packageTier)
                 
                 // Check if this package has a RevenueCat equivalent with fixed pricing
                 let revenueCatPackage = null
@@ -827,7 +960,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                   <Card 
                     key={packageId}
                     className={cn(
-                      "cursor-pointer transition-all hover:shadow-lg",
+                      "cursor-pointer transition-all hover:shadow-lg relative",
                       isSelected 
                         ? "border-2 border-primary bg-primary/5 shadow-md" 
                         : "border hover:border-primary/50"
@@ -837,14 +970,23 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            {pkg.title}
-                            {isSelected && (
-                              <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                                <Check className="w-4 h-4 text-primary-foreground" />
-                              </div>
-                            )}
-                          </CardTitle>
+                          <div className="flex items-center gap-2 mb-2">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              {pkg.title}
+                              {isSelected && (
+                                <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                  <Check className="w-4 h-4 text-primary-foreground" />
+                                </div>
+                              )}
+                            </CardTitle>
+                            <Badge 
+                              variant="outline" 
+                              className={cn("text-xs flex items-center gap-1", tierBadge.className)}
+                            >
+                              <span>{tierBadge.icon}</span>
+                              {tierBadge.label}
+                            </Badge>
+                          </div>
                           <CardDescription className="text-sm mt-1">
                             {pkg.description}
                           </CardDescription>
@@ -1142,6 +1284,11 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
             {paymentSuccess && (
               <p className="text-green-600 text-xs text-center">
                 🎉 Estimate confirmed! Redirecting to booking confirmation...
+                {selectedPackage && getPackageTier(selectedPackage) === 'free' && (
+                  <span className="block mt-1 text-blue-600">
+                    💡 Subscribe for enhanced packages with premium support!
+                  </span>
+                )}
               </p>
             )}
           </div>

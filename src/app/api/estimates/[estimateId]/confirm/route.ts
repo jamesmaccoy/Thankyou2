@@ -129,19 +129,102 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ est
         }, { status: 500 })
       }
     } else {
-      // No RevenueCat purchase result provided - check if this package type requires payment
-      console.log('No RevenueCat purchase result provided, checking if payment is required for package:', newPackageType)
+      // No RevenueCat purchase result provided - check if this is a subscriber-only package
+      console.log('No RevenueCat purchase result provided, checking package access for:', newPackageType)
       
-      // Define which package types don't require RevenueCat payment
-      const freePackageTypes = ['standard', 'basic'] // Add package types that don't require payment
+      // Define free packages available to all users (freemium tier)
+      const freePackageTypes = [
+        'per_night',           // Basic per night
+        'three_nights',        // Basic 3-night package
+        'weekly',              // Basic weekly package
+        'monthly',             // Basic monthly package
+        'wine_package',        // Wine add-on
+        'standard',            // Legacy support
+        'basic'                // Legacy support
+      ]
+      
+      // Define subscriber-only packages (require active subscription)
+      const subscriberPackageTypes = [
+        'per_night_customer',    // Enhanced per night for subscribers
+        'three_nights_customer', // Enhanced 3-night for subscribers
+        'weekly_customer',       // Enhanced weekly for subscribers
+      ]
+      
+      // Define premium packages that require individual payment
+      const premiumPackageTypes = [
+        'luxury_night',          // Luxury packages require payment
+        'hosted_3nights',        // Hosted packages require payment
+        'hosted_weekly',         // Hosted packages require payment
+        'hosted_7nights'         // Legacy hosted package
+      ]
       
       if (freePackageTypes.includes(newPackageType)) {
         paymentVerified = true
-        console.log('Package type does not require payment verification')
-      } else {
-        console.warn('Package type requires payment but no purchase result provided')
+        console.log('Package type is free tier, available to all users:', newPackageType)
+      } else if (subscriberPackageTypes.includes(newPackageType)) {
+        // Check if user has active subscription for subscriber packages
+        console.log('Checking subscription status for subscriber package:', newPackageType)
+        
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for subscription check')
+            return NextResponse.json({ 
+              error: 'Service configuration error. Please contact support.',
+              packageType: newPackageType,
+              requiresSubscription: true
+            }, { status: 500 })
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for active entitlements (subscription)
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasActiveSubscription = activeEntitlements.length > 0
+          
+          console.log('Subscription check result:', {
+            userId: user.id,
+            packageType: newPackageType,
+            hasActiveSubscription,
+            activeEntitlements
+          })
+          
+          if (hasActiveSubscription) {
+            paymentVerified = true
+            console.log('Subscriber package access granted for active subscriber:', newPackageType)
+          } else {
+            return NextResponse.json({ 
+              error: 'This enhanced package is exclusive to subscribers. Upgrade your plan to access premium features and priority support.',
+              packageType: newPackageType,
+              requiresSubscription: true,
+              suggestedAction: 'Subscribe to unlock enhanced packages'
+            }, { status: 403 }) // 403 Forbidden
+          }
+          
+        } catch (subscriptionError) {
+          console.error('Subscription check error:', subscriptionError)
+          return NextResponse.json({ 
+            error: 'Unable to verify subscription status. Please try again or contact support.',
+            packageType: newPackageType,
+            requiresSubscription: true
+          }, { status: 500 })
+        }
+      } else if (premiumPackageTypes.includes(newPackageType)) {
+        console.warn('Premium package requires individual payment:', newPackageType)
         return NextResponse.json({ 
-          error: 'Payment required for this package type' 
+          error: 'This premium package requires individual payment. Please complete the purchase to proceed.',
+          packageType: newPackageType,
+          requiresPayment: true
+        }, { status: 402 }) // 402 Payment Required
+      } else {
+        // Unknown package type - default to requiring subscription for safety
+        console.warn('Unknown package type, defaulting to requiring subscription:', newPackageType)
+        return NextResponse.json({ 
+          error: 'Package verification required. Please contact support if this error persists.',
+          packageType: newPackageType,
+          requiresSubscription: true
         }, { status: 400 })
       }
     }
