@@ -102,6 +102,7 @@ export const seed = async ({
         name: 'Demo Author',
         email: 'demo-author@example.com',
         password: 'password',
+        role: ['host'],
       },
     }),
     payload.create({
@@ -315,7 +316,7 @@ export const seed = async ({
             link: {
               type: 'custom',
               label: 'Admin',
-              url: '/admin',
+              url: '/host',
             },
           },
           {

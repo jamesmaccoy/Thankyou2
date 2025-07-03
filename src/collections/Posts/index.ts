@@ -11,6 +11,8 @@ import {
 
 import { authenticated } from '../../access/authenticated'
 import { authenticatedOrPublished } from '../../access/authenticatedOrPublished'
+import { hostOrCustomer } from '../../access/adminOrCustomer'
+import { isAdminOrCreatedBy } from '../../access/isAdmin'
 import { Banner } from '../../blocks/Banner/config'
 import { Code } from '../../blocks/Code/config'
 import { MediaBlock } from '../../blocks/MediaBlock/config'
@@ -25,15 +27,127 @@ import {
   OverviewField,
   PreviewField,
 } from '@payloadcms/plugin-seo/fields'
-import { slugField } from '@/fields/slug'
+import { slugField } from '../../fields/slug'
+import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
+import { requiresSubscriptionForAdmin } from '../../access/requiresSubscription'
+import { PayloadRequest } from 'payload'
 
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: authenticated,
-    delete: authenticated,
+    create: async ({ req }: { req: PayloadRequest }) => {
+      // Definitive access control for Plek creation with subscription check
+      const { user } = req
+      if (!user) return false
+      
+      const roles = user.role || []
+      
+      // Admins bypass subscription check
+      if (roles.includes('admin')) {
+        return true
+      }
+      
+      // For hosts and customers, require active subscription
+      if (roles.includes('host') || roles.includes('customer')) {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for create access')
+            return false
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for active entitlements
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasActiveSubscription = activeEntitlements.length > 0
+          
+          return hasActiveSubscription
+        } catch (error) {
+          console.error('Subscription check error for create access:', error)
+          return false
+        }
+      }
+      
+      return false
+    },
     read: authenticatedOrPublished,
-    update: authenticated,
+    update: ({ req: { user } }) => {
+      if (!user) return false
+      const roles = user.role || []
+      
+      // Allow admins full access
+      if (roles.includes('admin')) return true
+      
+      // Allow hosts and customers to update their own posts
+      if (roles.includes('host') || roles.includes('customer')) {
+        return {
+          authors: {
+            contains: user.id,
+          },
+        }
+      }
+      
+      return false
+    },
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      const roles = user.role || []
+      
+      // Allow admins full access
+      if (roles.includes('admin')) return true
+      
+      // Allow hosts and customers to delete their own posts
+      if (roles.includes('host') || roles.includes('customer')) {
+        return {
+          authors: {
+            contains: user.id,
+          },
+        }
+      }
+      
+      return false
+    },
+    // Adding subscription-enforced admin access control
+    admin: async ({ req }: { req: PayloadRequest }) => {
+      const { user } = req
+      if (!user) return false
+      
+      const roles = user.role || []
+      
+      // Admins bypass subscription check
+      if (roles.includes('admin')) {
+        return true
+      }
+      
+      // For hosts and customers, check subscription
+      if (roles.includes('host') || roles.includes('customer')) {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for admin access')
+            return false
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for active entitlements
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasActiveSubscription = activeEntitlements.length > 0
+          
+          return hasActiveSubscription
+        } catch (error) {
+          console.error('Subscription check error for admin access:', error)
+          return false
+        }
+      }
+      
+      return false
+    },
   },
   // This config controls what's populated by default when a post is referenced
   // https://payloadcms.com/docs/queries/select#defaultpopulate-collection-config-property
@@ -48,7 +162,16 @@ export const Posts: CollectionConfig<'posts'> = {
     },
   },
   admin: {
+    hidden: ({ user }) => {
+      if (!user) return true
+      const roles = user.role || []
+      return !roles.includes('admin') && !roles.includes('host') && !roles.includes('customer')
+    },
     defaultColumns: ['title', 'slug', 'updatedAt'],
+    group: 'Plek Creator',
+    useAsTitle: 'title',
+    description: '🏠 Create and manage your unique Pleks - your personal spaces for guests to discover and book',
+    listSearchableFields: ['title', 'slug'],
     livePreview: {
       url: ({ data, req }) => {
         const path = generatePreviewPath({
@@ -66,13 +189,16 @@ export const Posts: CollectionConfig<'posts'> = {
         collection: 'posts',
         req,
       }),
-    useAsTitle: 'title',
   },
   fields: [
     {
       name: 'title',
       type: 'text',
       required: true,
+      label: 'Plek Name',
+      admin: {
+        description: 'Give your Plek a memorable name that guests will love (e.g., "Cozy Mountain Retreat", "Urban Garden Oasis")',
+      },
     },
     {
       type: 'tabs',
@@ -220,25 +346,152 @@ export const Posts: CollectionConfig<'posts'> = {
     {
       name: 'baseRate',
       type: 'number',
-      label: 'Base Rate (per night)',
-      required: false,
-      min: 0,
       admin: {
         position: 'sidebar',
+        description: 'Base rate per night in USD',
       },
+      defaultValue: 150,
+    },
+    {
+      name: 'packageTypes',
+      type: 'array',
+      admin: {
+        position: 'sidebar',
+        description: 'Available packages for this plek. You can select from templates or create custom packages.',
+      },
+      fields: [
+        {
+          name: 'templateId',
+          type: 'select',
+          label: 'Package Template',
+          admin: {
+            description: 'Select a package template from the centralized system (optional)',
+          },
+          options: Object.entries(PACKAGE_TYPES).map(([key, template]) => ({
+            label: template.name,
+            value: key,
+          })),
+        },
+        {
+          name: 'name',
+          type: 'text',
+          required: true,
+          admin: {
+            description: 'Package name (will be auto-filled if using a template)',
+          },
+        },
+        {
+          name: 'description',
+          type: 'textarea',
+          admin: {
+            description: 'Package description (will be auto-filled if using a template)',
+          },
+        },
+        {
+          name: 'price',
+          type: 'number',
+          required: true,
+          admin: {
+            description: 'Price for this package (can override template pricing)',
+          },
+        },
+        {
+          name: 'multiplier',
+          type: 'number',
+          required: true,
+          defaultValue: 1,
+          admin: {
+            description: 'Price multiplier applied to base rate',
+          },
+        },
+        {
+          name: 'features',
+          type: 'array',
+          admin: {
+            description: 'Package features (will be auto-filled if using a template)',
+          },
+          fields: [
+            {
+              name: 'feature',
+              type: 'text',
+            },
+          ],
+        },
+        {
+          name: 'revenueCatId',
+          type: 'text',
+          admin: {
+            description: 'RevenueCat package identifier (will be auto-filled if using a template)',
+          },
+        },
+        {
+          name: 'category',
+          type: 'select',
+          label: 'Package Category',
+          admin: {
+            description: 'Package category for organization',
+          },
+          options: [
+            { label: 'Standard', value: 'standard' },
+            { label: 'Luxury', value: 'luxury' },
+            { label: 'Hosted', value: 'hosted' },
+            { label: 'Specialty', value: 'specialty' },
+          ],
+          defaultValue: 'standard',
+        },
+        {
+          name: 'minNights',
+          type: 'number',
+          label: 'Minimum Nights',
+          admin: {
+            description: 'Minimum number of nights for this package',
+          },
+        },
+        {
+          name: 'maxNights',
+          type: 'number',
+          label: 'Maximum Nights',
+          admin: {
+            description: 'Maximum number of nights for this package',
+          },
+        },
+        {
+          name: 'isHosted',
+          type: 'checkbox',
+          label: 'Hosted Package',
+          admin: {
+            description: 'Whether this package includes hosted services',
+          },
+        },
+      ],
     },
     ...slugField(),
   ],
   hooks: {
+    beforeChange: [
+      ({ data, operation, req }) => {
+        // Auto-assign current user as author when creating a new post
+        if (operation === 'create' && req.user) {
+          const currentAuthors = data.authors || []
+          // Only add the user if they're not already in the authors list
+          if (!currentAuthors.includes(req.user.id)) {
+            data.authors = [...currentAuthors, req.user.id]
+          }
+        }
+        
+        // Removed auto-population to prevent recursion issues
+        // Package template selection can be handled in the frontend
+        return data
+      },
+    ],
     afterChange: [revalidatePost],
     afterRead: [populateAuthors],
     afterDelete: [revalidateDelete],
   },
   versions: {
     drafts: {
-      autosave: {
-        interval: 100, // We set this interval for optimal live preview
-      },
+      // Disable autosave to prevent conflicts with manual saves
+      autosave: false,
       schedulePublish: true,
     },
     maxPerDoc: 50,

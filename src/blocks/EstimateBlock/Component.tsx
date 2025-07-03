@@ -10,8 +10,10 @@ import { CalendarIcon } from 'lucide-react'
 import type { EstimateBlockType } from './types'
 import { useUserContext } from '@/context/UserContext'
 import { useSubscription } from '@/hooks/useSubscription'
+import { isHost } from '@/access/isAdmin'
 
 import { calculateTotal } from '@/lib/calculateTotal'
+import { hasUnavailableDateBetween } from '@/utilities/hasUnavailableDateBetween'
 
 export type EstimateBlockProps = EstimateBlockType & {
   className?: string
@@ -99,9 +101,21 @@ function getValidTier(diffDays: number): PackageTier {
 function getValidBaseRate(baseRate: unknown, baseRateOverride: unknown): number {
   const override = Number(baseRateOverride);
   const base = Number(baseRate);
-  if (!isNaN(override) && override > 0) return override;
-  if (!isNaN(base) && base > 0) return base;
+  
+  // Check override first - use it if it's a valid number and greater than 0
+  if (!isNaN(override) && override >= 0) return override;
+  
+  // Then check baseRate - use it if it's a valid number (including 0)
+  if (!isNaN(base) && base >= 0) return base;
+  
+  // Only fall back to 150 if neither is valid
   return 150; // fallback default
+}
+
+function fetchUnavailableDates(postId: string): Promise<string[]> {
+  return fetch(`/api/unavailable-dates?postId=${postId}`)
+    .then((res) => res.json())
+    .then((data) => data.unavailableDates || [])
 }
 
 export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRate = 150, baseRateOverride, blockType, postId }) => {
@@ -110,6 +124,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   const [endDate, setEndDate] = useState<Date | null>(null)
   const [selectedDuration, setSelectedDuration] = useState(1)
   const [currentTier, setCurrentTier] = useState<PackageTier>(getValidTier(1));
+  const [unavailableDates, setUnavailableDates] = useState<string[]>([])
   const { currentUser } = useUserContext()
   const { isSubscribed } = useSubscription()
   const isCustomer = !!currentUser
@@ -125,147 +140,220 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       // Always get a valid tier
       const tier = getValidTier(diffDays)
 
+      if (diffDays < 1 || startDate >= endDate) {
+        setEndDate(null)
+      }
+
       setSelectedDuration(diffDays)
       setCurrentTier(tier)
     }
   }, [startDate, endDate])
 
+  useEffect(() => {
+    fetchUnavailableDates(postId).then((dates) => setUnavailableDates(dates))
+  }, [postId])
+
   if (blockType !== 'stayDuration') {
     return null
   }
 
+  const handleBookingClick = async () => {
+    if (!startDate || !endDate) return;
+    if (!currentUser?.id) {
+      alert("You must be logged in to create an estimate.");
+      return;
+    }
+    const res = await fetch('/api/estimates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postId,
+        fromDate: startDate.toISOString(),
+        toDate: endDate.toISOString(),
+        guests: [], // or your guests data
+        total: canSeeDiscount ? packageTotal : baseTotal,
+        customer: currentUser.id,
+      }),
+    });
+    if (res.ok) {
+      const estimate = await res.json();
+      window.location.href = `/estimate/${estimate.id}`;
+    } else {
+      const errorText = await res.text();
+      alert('Failed to create estimate: ' + errorText);
+    }
+  }
+
   return (
-    <div 
-      data-stay-duration 
-      className={cn('flex flex-col space-y-4 p-6 bg-card rounded-lg border border-border', className)}
-    >
-      <h3 className="text-lg font-semibold">Estimate</h3>
-      
-      {/* Date Selection */}
-      <div className="flex flex-col space-y-2">
-        <label className="text-sm font-medium">Duration</label>
-        <div className="flex space-x-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !startDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {startDate ? format(startDate, "PPP") : <span>When</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={startDate || undefined}
-                onSelect={(date) => setStartDate(date || null)}
-                disabled={(date) => date < new Date()}
-              />
-            </PopoverContent>
-          </Popover>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !endDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {endDate ? format(endDate, "PPP") : <span>Until</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={endDate || undefined}
-                onSelect={(date) => setEndDate(date || null)}
-                disabled={(date) => !startDate || date <= startDate}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-
-      {/* Package Information */}
-      <div className="space-y-2">
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">Package:</span>
-          <span className="font-medium">{currentTier.title}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">Base Rate:</span>
-          <span className="font-medium">R{effectiveBaseRate}/night</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">Duration:</span>
-          <span className="font-medium">{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
-        </div>
-        {/* Discount preview for non-subscribers */}
-        {currentTier?.multiplier !== 1 && (
-          <div className="flex justify-between items-center text-green-600">
-            <span className="text-sm">Discount:</span>
-            <span className="font-medium">{((1 - (currentTier?.multiplier ?? 1)) * 100).toFixed(0)}% off</span>
-          </div>
-        )}
-        {/* Show locked package total for non-subscribers */}
-        {currentTier?.multiplier !== 1 && !canSeeDiscount && (
-          <div className="flex justify-between items-center text-gray-500">
-            <span className="text-sm">With subscription:</span>
-            <span className="font-medium">R{packageTotal.toFixed(2)} <span className="ml-2 text-xs">(Login & subscribe to unlock)</span></span>
-          </div>
-        )}
-      </div>
-
-      {/* Total Price */}
-      <div className="pt-4 border-t border-border">
-        <div className="flex justify-between items-center">
-          <span className="text-lg font-medium">Total:</span>
-          <span className="text-2xl font-bold">
-            {canSeeDiscount ? `R${packageTotal.toFixed(2)}` : `R${baseTotal.toFixed(2)}`}
-          </span>
-        </div>
-      </div>
-
-      {/* Book Now Button */}
-      <Button 
-        className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-        disabled={!startDate || !endDate}
-        onClick={async () => {
-          if (!startDate || !endDate) return;
-          if (!currentUser?.id) {
-            alert("You must be logged in to create an estimate.");
-            return;
-          }
-          const res = await fetch('/api/estimates', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              postId,
-              fromDate: startDate.toISOString(),
-              toDate: endDate.toISOString(),
-              guests: [], // or your guests data
-              total: canSeeDiscount ? packageTotal : baseTotal,
-              customer: currentUser.id,
-            }),
-          });
-          if (res.ok) {
-            const estimate = await res.json();
-            window.location.href = `/estimate/${estimate.id}`;
-          } else {
-            const errorText = await res.text();
-            alert('Failed to create estimate: ' + errorText);
-          }
-        }}
+    <>
+      {/* Main Content Area - Scrollable */}
+      <div 
+        data-stay-duration 
+        className={cn('flex flex-col space-y-6 p-6 bg-card rounded-lg border border-border mb-24 md:mb-8', className)}
       >
-        {!startDate || !endDate ? 'Select dates to book' : 'Request Availability'}
-      </Button>
-    </div>
+        <h3 className="text-xl font-semibold">Book your stay</h3>
+        
+        {/* Date Selection */}
+        <div className="flex flex-col space-y-3">
+          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Dates</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal h-14 text-base",
+                    !startDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-3 h-5 w-5" />
+                  <div className="flex flex-col items-start">
+                    <span className="text-xs text-muted-foreground">CHECK-IN</span>
+                    <span className="text-sm">{startDate ? format(startDate, "MMM d, yyyy") : "Add date"}</span>
+                  </div>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={startDate || undefined}
+                  onSelect={(date) => setStartDate(date || null)}
+                  disabled={(date) =>
+                    date < new Date() || unavailableDates.includes(date.toISOString())
+                  }
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal h-14 text-base",
+                    !endDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-3 h-5 w-5" />
+                  <div className="flex flex-col items-start">
+                    <span className="text-xs text-muted-foreground">CHECK-OUT</span>
+                    <span className="text-sm">{endDate ? format(endDate, "MMM d, yyyy") : "Add date"}</span>
+                  </div>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={endDate || undefined}
+                  onSelect={(date) => setEndDate(date || null)}
+                  disabled={(date) =>
+                    !startDate ||
+                    date <= startDate ||
+                    unavailableDates.includes(date.toISOString()) ||
+                    hasUnavailableDateBetween(unavailableDates, startDate, date)
+                  }
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Package Information - Only show when dates are selected */}
+        {startDate && endDate && (
+          <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
+            <h4 className="font-medium text-muted-foreground uppercase tracking-wide text-sm">Booking Details</h4>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Package:</span>
+                <span className="font-medium">{currentTier.title}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Base Rate:</span>
+                <span className="font-medium">R{effectiveBaseRate}/night</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Duration:</span>
+                <span className="font-medium">{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
+              </div>
+              {/* Discount preview for non-subscribers */}
+              {currentTier?.multiplier !== 1 && (
+                <div className="flex justify-between items-center text-green-600">
+                  <span className="text-sm">Discount:</span>
+                  <span className="font-medium">{((1 - (currentTier?.multiplier ?? 1)) * 100).toFixed(0)}% off</span>
+                </div>
+              )}
+              {/* Show locked package total for non-subscribers */}
+              {currentTier?.multiplier !== 1 && !canSeeDiscount && (
+                <div className="flex justify-between items-center text-gray-500 border-t pt-3">
+                  <span className="text-sm">With subscription:</span>
+                  <div className="text-right">
+                    <div className="font-medium">R{packageTotal.toFixed(2)}</div>
+                    <div className="text-xs">(Login & subscribe to unlock)</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Additional content spacer for mobile to prevent content being hidden behind sticky footer */}
+        <div className="block md:hidden h-4"></div>
+      </div>
+
+      {/* Sticky Footer - Mobile First Design */}
+      <div className="sticky-footer">
+        <div className="sticky-footer-container">
+          <div className="flex items-center justify-between gap-4">
+            {/* Price Display */}
+            <div className="flex flex-col">
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl md:text-2xl font-bold">
+                  {startDate && endDate ? (
+                    `R${(canSeeDiscount ? packageTotal : baseTotal).toFixed(2)}`
+                  ) : (
+                    `R${effectiveBaseRate}`
+                  )}
+                </span>
+                {startDate && endDate ? (
+                  <span className="text-sm text-muted-foreground">total</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">per night</span>
+                )}
+              </div>
+              {startDate && endDate && selectedDuration > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  R{Math.round((canSeeDiscount ? packageTotal : baseTotal) / selectedDuration)} avg/night
+                </span>
+              )}
+            </div>
+
+            {/* CTA Button */}
+            <Button 
+              className="bg-primary text-primary-foreground hover:bg-primary/90 text-base font-semibold px-8 py-3 h-auto min-w-[140px]"
+              disabled={!startDate || !endDate || !currentUser?.id}
+              onClick={handleBookingClick}
+            >
+              {!currentUser?.id ? (
+                'Log in to book'
+              ) : !startDate || !endDate ? (
+                'Check availability'
+              ) : (
+                'Request booking'
+              )}
+            </Button>
+          </div>
+
+          {/* Additional info for mobile */}
+          {startDate && endDate && (
+            <div className="block md:hidden mt-3 pt-3 border-t border-border/50">
+              <div className="flex justify-between items-center text-sm text-muted-foreground">
+                <span>{currentTier.title}</span>
+                <span>{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   )
 } 

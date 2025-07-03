@@ -64,7 +64,10 @@ export async function GET(req: NextRequest) {
       else if (lower.includes('standard')) packageType = 'standard'
     }
     if (!packageType && estimate.fromDate && estimate.toDate && estimate.total && estimate.post && typeof estimate.post === 'object') {
-      const baseRate = estimate.post.baseRate || 150
+      // Use proper fallback logic - only use 150 if baseRate is null, undefined, or NaN
+      const baseRate = (typeof estimate.post.baseRate === 'number' && !isNaN(estimate.post.baseRate)) 
+        ? estimate.post.baseRate 
+        : 150
       const duration = Math.ceil((new Date(estimate.toDate).getTime() - new Date(estimate.fromDate).getTime()) / (1000 * 60 * 60 * 24))
       for (const [key, multiplier] of Object.entries(PACKAGE_RATES)) {
         if (Math.abs(estimate.total - baseRate * duration * (multiplier as number)) < 1) {
