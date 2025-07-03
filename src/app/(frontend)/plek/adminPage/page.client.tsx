@@ -23,7 +23,7 @@ import Image from 'next/image'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
 import { toast } from 'sonner'
-import { PACKAGE_TYPES, getPackageById, getAllPackageTypes, getPackageIconComponent } from '@/lib/package-types'
+import { PACKAGE_TYPES, getPackageById, getPackageIconComponent } from '@/lib/package-types'
 import { RoleUpgrade } from '@/components/RoleUpgrade'
 
 interface PlekAdminClientProps {
@@ -116,11 +116,11 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
 
   // Initialize package templates inside component to avoid React Context issues
   const packageTemplates = useMemo(() => {
-    const allPackageTypes = getAllPackageTypes()
+    const allPackageTypes = PACKAGE_TYPES
     if (!allPackageTypes) return {}
     
-    return Object.values(allPackageTypes).reduce((acc: Record<string, any>, pkg) => {
-      acc[pkg.id] = {
+    return Object.entries(allPackageTypes).reduce((acc: Record<string, any>, [key, pkg]) => {
+      acc[key] = {
         name: pkg.name,
         description: pkg.description,
         multiplier: pkg.multiplier,
@@ -2049,7 +2049,7 @@ function PostForm({
           <div className="p-4 border rounded-lg bg-muted/50">
             <p className="text-sm font-medium mb-2">Quick Add Templates:</p>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => {
+              {Object.entries(PACKAGE_TYPES || {}).map(([key, template]) => {
                 const PackageIcon = getPackageIconComponent(key)
                 return (
                   <Button

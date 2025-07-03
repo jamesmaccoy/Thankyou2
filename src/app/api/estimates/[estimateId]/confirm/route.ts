@@ -133,7 +133,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ est
       console.log('No RevenueCat purchase result provided, checking package access for:', newPackageType)
       
       // Define free packages available to all users (freemium tier)
-      const freePackageTypes = [
+      const freePackageTypes: string[] = [
         'per_night',           // Basic per night
         'three_nights',        // Basic 3-night package
         'weekly',              // Basic weekly package
@@ -143,19 +143,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ est
         'basic'                // Legacy support
       ]
       
-      // Define subscriber-only packages (require active subscription)
-      const subscriberPackageTypes = [
+      // Define subscriber-only packages (require active subscription/pro entitlement)
+      const subscriberPackageTypes: string[] = [
         'per_night_customer',    // Enhanced per night for subscribers
         'three_nights_customer', // Enhanced 3-night for subscribers
         'weekly_customer',       // Enhanced weekly for subscribers
       ]
       
-      // Define premium packages that require individual payment
-      const premiumPackageTypes = [
-        'luxury_night',          // Luxury packages require payment
-        'hosted_3nights',        // Hosted packages require payment
-        'hosted_weekly',         // Hosted packages require payment
+      // Define luxury packages (require luxury entitlement or payment)
+      const luxuryPackageTypes: string[] = [
+        'luxury_night',          // Luxury per night
+        'hosted_3nights',        // Luxury 3-night hosted experience
+        'hosted_weekly',         // Luxury weekly hosted experience
         'hosted_7nights'         // Legacy hosted package
+      ]
+      
+      // Define premium packages that require individual payment (legacy packages not in new architecture)
+      const premiumPackageTypes: string[] = [
+        // These are packages that truly require individual payment and aren't covered by entitlements
+        // Most packages should now be covered by the standard/pro/luxury entitlement system
       ]
       
       if (freePackageTypes.includes(newPackageType)) {
@@ -209,6 +215,58 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ est
             error: 'Unable to verify subscription status. Please try again or contact support.',
             packageType: newPackageType,
             requiresSubscription: true
+          }, { status: 500 })
+        }
+      } else if (luxuryPackageTypes.includes(newPackageType)) {
+        // Check if user has luxury entitlement or recent purchase for luxury packages
+        console.log('Checking luxury package access for:', newPackageType)
+        
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for luxury package check')
+            return NextResponse.json({ 
+              error: 'Service configuration error. Please contact support.',
+              packageType: newPackageType,
+              requiresPayment: true
+            }, { status: 500 })
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for luxury entitlements or recent purchases
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasLuxuryEntitlement = activeEntitlements.some(ent => 
+            ent.includes('luxury') || ent.includes('pro') || ent.includes('premium')
+          )
+          
+          console.log('Luxury package check result:', {
+            userId: user.id,
+            packageType: newPackageType,
+            hasLuxuryEntitlement,
+            activeEntitlements
+          })
+          
+          if (hasLuxuryEntitlement) {
+            paymentVerified = true
+            console.log('Luxury package access granted through entitlement:', newPackageType)
+          } else {
+            return NextResponse.json({ 
+              error: 'This luxury package requires individual payment. Please complete the purchase to proceed.',
+              packageType: newPackageType,
+              requiresPayment: true,
+              suggestedAction: 'Purchase luxury package or upgrade to luxury tier'
+            }, { status: 402 }) // 402 Payment Required
+          }
+          
+        } catch (luxuryError) {
+          console.error('Luxury package check error:', luxuryError)
+          return NextResponse.json({ 
+            error: 'Unable to verify luxury package access. Please try again or contact support.',
+            packageType: newPackageType,
+            requiresPayment: true
           }, { status: 500 })
         }
       } else if (premiumPackageTypes.includes(newPackageType)) {

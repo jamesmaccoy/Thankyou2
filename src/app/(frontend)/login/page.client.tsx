@@ -22,7 +22,7 @@ export default function LoginPage() {
             className="w-1/2"
             onClick={() => setMode('email')}
           >
-            Email Link / OTP
+             Magic Link / Email SSO
           </Button>
           <Button
             variant={mode === 'password' ? 'secondary' : 'outline'}

@@ -33,21 +33,14 @@ export const getPackageIconComponent = (packageTypeId: string): LucideIcon => {
   return ICON_MAP[iconName] || PackageIcon
 }
 
-export interface PackageType {
-  id: string
+// Interfaces
+export interface TierInfo {
   name: string
+  color: string
   description: string
-  multiplier: number
-  features: string[]
-  revenueCatId: string
-  minNights?: number
-  maxNights?: number
-  isHosted?: boolean
-  category: 'standard' | 'luxury' | 'hosted' | 'specialty'
-  icon: string // Lucide icon name
 }
 
-export interface PackageTypeTemplate {
+export interface PackageType {
   name: string
   description: string
   multiplier: number
@@ -57,7 +50,29 @@ export interface PackageTypeTemplate {
   maxNights?: number
   isHosted?: boolean
   category: 'standard' | 'luxury' | 'hosted' | 'specialty'
-  icon: string // Lucide icon name
+  icon: string
+  tier: 'standard' | 'pro' | 'luxury'
+  baseTemplate: 'per_night' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
+  durationVariant?: string
+}
+
+export interface PackageTypeTemplate extends PackageType {}
+
+// Base templates for organizing packages
+export type BaseTemplate = 'per_night' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
+
+// User tiers for package access
+export type UserTier = 'guest' | 'standard' | 'pro' | 'luxury'
+
+// Package mapping interface for organizing by base template and tier
+export interface PackageMapping {
+  [baseTemplate: string]: {
+    [tier: string]: {
+      packageId: string
+      revenueCatId: string
+      durationVariant?: string
+    }
+  }
 }
 
 // Centralized package types definition based on Plek's core offerings
@@ -77,7 +92,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 1,
     maxNights: 1,
     category: 'standard',
-    icon: 'camera'
+    icon: 'camera',
+    tier: 'standard',
+    baseTemplate: 'per_night'
   },
 
   // Luxury Packages
@@ -98,7 +115,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     maxNights: 1,
     isHosted: true,
     category: 'luxury',
-    icon: 'crown'
+    icon: 'crown',
+    tier: 'luxury',
+    baseTemplate: 'per_night'
   },
 
   // Multi-night Packages
@@ -117,7 +136,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 3,
     maxNights: 3,
     category: 'standard',
-    icon: 'calendar-days'
+    icon: 'calendar-days',
+    tier: 'standard',
+    baseTemplate: 'three_nights'
   },
 
   hosted_3nights: {
@@ -138,7 +159,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     maxNights: 3,
     isHosted: true,
     category: 'hosted',
-    icon: 'user-check'
+    icon: 'user-check',
+    tier: 'luxury',
+    baseTemplate: 'three_nights'
   },
 
   // Weekly Packages
@@ -158,7 +181,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 7,
     maxNights: 7,
     category: 'standard',
-    icon: 'calendar-range'
+    icon: 'calendar-range',
+    tier: 'standard',
+    baseTemplate: 'weekly'
   },
 
   hosted_weekly: {
@@ -180,7 +205,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     maxNights: 7,
     isHosted: true,
     category: 'hosted',
-    icon: 'user-check'
+    icon: 'user-check',
+    tier: 'luxury',
+    baseTemplate: 'weekly'
   },
 
   // Specialty Packages
@@ -198,7 +225,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     ],
     revenueCatId: "Bottle_wine",
     category: 'specialty',
-    icon: 'wine'
+    icon: 'wine',
+    tier: 'standard',
+    baseTemplate: 'wine_package'
   },
 
   // Customer (Paid) Packages - Enhanced versions with premium features
@@ -220,7 +249,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 1,
     maxNights: 1,
     category: 'standard',
-    icon: 'star'
+    icon: 'star',
+    tier: 'pro',
+    baseTemplate: 'per_night'
   },
 
   three_nights_customer: {
@@ -243,7 +274,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 3,
     maxNights: 3,
     category: 'standard',
-    icon: 'crown'
+    icon: 'crown',
+    tier: 'pro',
+    baseTemplate: 'three_nights'
   },
 
   weekly_customer: {
@@ -267,7 +300,9 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 7,
     maxNights: 7,
     category: 'standard',
-    icon: 'briefcase'
+    icon: 'briefcase',
+    tier: 'pro',
+    baseTemplate: 'weekly'
   },
 
   // Monthly Packages
@@ -289,9 +324,69 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 30,
     maxNights: 90,
     category: 'standard',
-    icon: 'calendar'
+    icon: 'calendar',
+    tier: 'standard',
+    baseTemplate: 'monthly'
   }
 } as const
+
+// Comprehensive package mapping for all base templates and tiers
+export const PACKAGE_MAPPINGS: PackageMapping = {
+  per_night: {
+    standard: {
+      packageId: 'per_night',
+      revenueCatId: 'per_night'
+    },
+    pro: {
+      packageId: 'per_night_customer',
+      revenueCatId: 'per_night_pro'
+    },
+    luxury: {
+      packageId: 'luxury_night',
+      revenueCatId: 'per_night_luxury'
+    }
+  },
+  three_nights: {
+    standard: {
+      packageId: 'three_nights',
+      revenueCatId: '3nights'
+    },
+    pro: {
+      packageId: 'three_nights_customer',
+      revenueCatId: '3nights_pro'
+    },
+    luxury: {
+      packageId: 'hosted_3nights',
+      revenueCatId: 'hosted3nights'
+    }
+  },
+  weekly: {
+    standard: {
+      packageId: 'weekly',
+      revenueCatId: 'Weekly'
+    },
+    pro: {
+      packageId: 'weekly_customer',
+      revenueCatId: 'weekly_pro'
+    },
+    luxury: {
+      packageId: 'hosted_weekly',
+      revenueCatId: 'hosted_weekly'
+    }
+  },
+  monthly: {
+    standard: {
+      packageId: 'monthly',
+      revenueCatId: 'monthly'
+    }
+  },
+  wine_package: {
+    standard: {
+      packageId: 'wine_package',
+      revenueCatId: 'Bottle_wine'
+    }
+  }
+}
 
 // Helper functions
 export const getPackageById = (id: string): PackageTypeTemplate | null => {
@@ -328,26 +423,52 @@ export const validatePackageType = (packageType: Partial<PackageType>): boolean 
   )
 }
 
-// Convert template to full package type
-export const createPackageFromTemplate = (id: string, template: PackageTypeTemplate): PackageType => {
-  return {
-    id,
-    ...template
-  }
-}
-
-// Get all package types as full PackageType objects
-export const getAllPackageTypes = (): Record<string, PackageType> => {
-  return Object.fromEntries(
-    Object.entries(PACKAGE_TYPES).map(([id, template]) => [
-      id,
-      createPackageFromTemplate(id, template)
-    ])
-  )
-}
-
 // Get icon name for a package type
 export const getPackageIcon = (packageTypeId: string): string => {
   const packageType = getPackageById(packageTypeId)
   return packageType?.icon || 'package'
+}
+
+// Helper function to get the appropriate package based on user tier and base template
+export function getPackageForUserTier(baseTemplate: BaseTemplate, userTier: UserTier): string | null {
+  const templateMapping = PACKAGE_MAPPINGS[baseTemplate]
+  if (!templateMapping) return null
+  
+  // Try to get the exact tier, fallback to standard if not available
+  const tierMapping = templateMapping[userTier] || templateMapping['standard']
+  return tierMapping?.packageId || null
+}
+
+export function getRevenueCatIdForPackage(baseTemplate: BaseTemplate, userTier: UserTier): string | null {
+  const templateMapping = PACKAGE_MAPPINGS[baseTemplate]
+  if (!templateMapping) return null
+  
+  const tierMapping = templateMapping[userTier] || templateMapping['standard']
+  return tierMapping?.revenueCatId || null
+}
+
+export function getDurationVariant(numberOfNights: number): string | undefined {
+  if (numberOfNights === 14) return 'x2'  // 2 weeks
+  if (numberOfNights === 21) return 'x3'  // 3 weeks  
+  if (numberOfNights === 28) return 'x4'  // 4 weeks
+  return undefined
+}
+
+// Tier information for UI display
+export const TIER_INFO: Record<string, TierInfo> = {
+  standard: {
+    name: 'Standard',
+    color: 'blue',
+    description: 'Basic features and support'
+  },
+  pro: {
+    name: 'Pro',
+    color: 'purple', 
+    description: 'Enhanced features and priority support'
+  },
+  luxury: {
+    name: 'Luxury',
+    color: 'gold',
+    description: 'Premium experience with hosted services'
+  }
 } 

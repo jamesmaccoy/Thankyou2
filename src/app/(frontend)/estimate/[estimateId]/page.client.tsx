@@ -20,7 +20,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { DateRange } from 'react-day-picker'
 import React from 'react'
-import { getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { getPackageById, PACKAGE_TYPES } from '@/lib/package-types'
 import { Badge } from '@/components/ui/badge'
 
 // Enhanced interface for package details with filtering capabilities
@@ -295,10 +295,9 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     }
     
     // SECOND PRIORITY: Fallback to centralized packages if no post-specific packages
-    const centralizedPackages = getAllPackageTypes()
-    if (centralizedPackages && Object.keys(centralizedPackages).length > 0) {
+    if (PACKAGE_TYPES && Object.keys(PACKAGE_TYPES).length > 0) {
       const packageDetails: Record<string, EnhancedPackageDetails> = {}
-      Object.entries(centralizedPackages).forEach(([key, pkg]) => {
+      Object.entries(PACKAGE_TYPES).forEach(([key, pkg]) => {
         packageDetails[key] = {
           id: key,
           title: pkg.name,

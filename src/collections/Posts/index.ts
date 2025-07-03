@@ -28,7 +28,7 @@ import {
   PreviewField,
 } from '@payloadcms/plugin-seo/fields'
 import { slugField } from '../../fields/slug'
-import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
+import { PACKAGE_TYPES } from '@/lib/package-types'
 import { requiresSubscriptionForAdmin } from '../../access/requiresSubscription'
 import { PayloadRequest } from 'payload'
 

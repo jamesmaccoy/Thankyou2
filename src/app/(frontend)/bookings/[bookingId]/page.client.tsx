@@ -12,7 +12,7 @@ import { useRevenueCat } from '@/providers/RevenueCat'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { DateRange } from 'react-day-picker'
-import { getPackageById, getAllPackageTypes, getPackageIconComponent } from '@/lib/package-types'
+import { getPackageById, PACKAGE_TYPES, getPackageIconComponent } from '@/lib/package-types'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
 type Props = {

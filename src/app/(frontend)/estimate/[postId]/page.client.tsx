@@ -1,7 +1,7 @@
-import { getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { getPackageById, PACKAGE_TYPES } from '@/lib/package-types'
 
 // Replace the default packages with centralized types
-const defaultPackages = Object.values(getAllPackageTypes()).map(pkg => ({
+const defaultPackages = Object.values(PACKAGE_TYPES).map(pkg => ({
   name: pkg.name,
   description: pkg.description,
   price: '0',
