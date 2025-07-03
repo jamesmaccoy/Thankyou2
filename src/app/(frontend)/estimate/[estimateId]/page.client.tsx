@@ -37,6 +37,50 @@ interface EnhancedPackageDetails {
   availableSeasons: string[]
 }
 
+// Helper functions for package tier identification
+const getPackageTier = (packageId: string): 'free' | 'premium' | 'luxury' => {
+  const freePackages = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package']
+  const premiumPackages = ['per_night_customer', 'three_nights_customer', 'weekly_customer']
+  const luxuryPackages = ['luxury_night', 'hosted_3nights', 'hosted_weekly']
+  
+  if (freePackages.includes(packageId)) return 'free'
+  if (premiumPackages.includes(packageId)) return 'premium'
+  if (luxuryPackages.includes(packageId)) return 'luxury'
+  return 'free' // Default to free for unknown packages
+}
+
+const getTierBadgeInfo = (tier: 'free' | 'premium' | 'luxury') => {
+  switch (tier) {
+    case 'free':
+      return { 
+        label: 'Standard', 
+        className: 'bg-gray-100 text-gray-700 border-gray-300',
+        icon: '✨'
+      }
+    case 'premium':
+      return { 
+        label: 'Enhanced', 
+        className: 'bg-blue-100 text-blue-700 border-blue-300',
+        icon: '⭐'
+      }
+    case 'luxury':
+      return { 
+        label: 'Premium', 
+        className: 'bg-purple-100 text-purple-700 border-purple-300',
+        icon: '👑'
+      }
+  }
+}
+
+const getUpgradeSuggestion = (packageId: string): string | null => {
+  const upgradeMap: Record<string, string> = {
+    'per_night': 'per_night_customer',
+    'three_nights': 'three_nights_customer', 
+    'weekly': 'weekly_customer'
+  }
+  return upgradeMap[packageId] || null
+}
+
 interface RevenueCatError extends Error {
   code?: ErrorCode;
 }
@@ -71,7 +115,9 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   // Fetch post data if it's not populated in the estimate
   useEffect(() => {
     const fetchPostData = async () => {
-      if (!_post && _postId) {
+      // Always fetch the post data if we have a postId, even if _post exists
+      // This ensures we get the latest baseRate and other data
+      if (_postId) {
         setLoadingPost(true)
         try {
           const response = await fetch(`/api/posts/${_postId}`)
@@ -80,6 +126,8 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
             const post = result.doc // API returns { doc: post }
             setPostData(post)
             console.log('Fetched post data:', post)
+            console.log('Post baseRate from API:', post?.baseRate, typeof post?.baseRate)
+            console.log('Post packageTypes from API:', post?.packageTypes)
           } else {
             console.error('Failed to fetch post data:', response.status)
           }
@@ -92,10 +140,10 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     }
 
     fetchPostData()
-  }, [_post, _postId])
+  }, [_postId]) // Remove _post dependency to always fetch fresh data
 
-  // Use either the populated post or the fetched post data
-  const effectivePost = _post || postData
+  // Use the fetched post data (which has fresh baseRate) over the populated post
+  const effectivePost = postData || _post
 
   const [guests, setGuests] = useState<User[]>(Array.isArray(data.guests) ? data.guests.filter(g => typeof g !== 'string') as User[] : [])
   const [loading, setLoading] = useState(false)
@@ -112,6 +160,9 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const [selectedDuration, setSelectedDuration] = useState<number>(typeof _bookingDuration === 'number' ? _bookingDuration : 1)
   const [isWineSelected, setIsWineSelected] = useState(false)
   const [packagePrice, setPackagePrice] = useState<number | null>(null)
+  const [hasUserSelectedPackage, setHasUserSelectedPackage] = useState(false) // Track manual selection
+  const [userHasSubscription, setUserHasSubscription] = useState<boolean>(false)
+  const [subscriptionCheckLoading, setSubscriptionCheckLoading] = useState<boolean>(true)
 
   // Add state for date range selection
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -119,7 +170,25 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     to: data?.toDate ? new Date(data.toDate) : undefined,
   })
 
-  // Filter packages based on duration and season
+  // Helper function to get the appropriate package based on subscription status
+  const getPackageForUser = (basePackageId: string, hasSubscription: boolean): string => {
+    // Map free packages to their enhanced versions for subscribers
+    const packageUpgradeMap: Record<string, string> = {
+      'per_night': 'per_night_customer',
+      'three_nights': 'three_nights_customer',
+      'weekly': 'weekly_customer'
+    }
+    
+    // If user has subscription and there's an enhanced version, return it
+    if (hasSubscription && packageUpgradeMap[basePackageId]) {
+      return packageUpgradeMap[basePackageId]
+    }
+    
+    // Otherwise return the base package
+    return basePackageId
+  }
+
+  // Filter packages based on duration, season, and user subscription status
   const getFilteredPackages = (): Record<string, EnhancedPackageDetails> => {
     const allPackages = getPackageDetails()
     const currentDate = new Date()
@@ -135,21 +204,49 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     
     const currentSeason = getCurrentSeason()
     
-    return Object.fromEntries(
-      Object.entries(allPackages).filter(([key, pkg]) => {
-        // Type assertion for pkg
-        const packageInfo = pkg as EnhancedPackageDetails
-        
-        // Filter by duration
-        const withinDuration = selectedDuration >= packageInfo.minNights && selectedDuration <= packageInfo.maxNights
-        
-        // Filter by season (if package has season restrictions)
-        const seasonMatch = packageInfo.availableSeasons.includes('all') || 
-                           packageInfo.availableSeasons.includes(currentSeason)
-        
-        return withinDuration && seasonMatch
-      })
-    )
+    // Define base packages that should be offered
+    const basePackages = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package', 'luxury_night', 'hosted_3nights', 'hosted_weekly']
+    
+    const filteredPackages: Record<string, EnhancedPackageDetails> = {}
+    
+    basePackages.forEach(basePackageId => {
+      // Get the appropriate package for this user (enhanced if subscriber, basic if not)
+      const userPackageId = getPackageForUser(basePackageId, userHasSubscription)
+      let packageInfo = allPackages[userPackageId]
+      
+      // If the enhanced package doesn't exist, fall back to the base package
+      if (!packageInfo && userPackageId !== basePackageId) {
+        console.warn(`Enhanced package ${userPackageId} not found, falling back to ${basePackageId}`)
+        packageInfo = allPackages[basePackageId]
+      }
+      
+      if (!packageInfo) {
+        console.warn(`Package ${basePackageId} not found, skipping`)
+        return // Skip if package doesn't exist
+      }
+      
+      // Skip wine package from main selection
+      if (basePackageId === 'wine_package') return
+      
+      // Filter by duration
+      const minNights = packageInfo.minNights || 1
+      const maxNights = packageInfo.maxNights || 365
+      const withinDuration = selectedDuration >= minNights && selectedDuration <= maxNights
+      
+      // Filter by season
+      const seasonMatch = packageInfo.availableSeasons.includes('all') || 
+                         packageInfo.availableSeasons.includes(currentSeason)
+      
+      if (withinDuration && seasonMatch) {
+        // Use the actual package we found (might be fallback)
+        const actualPackageId = packageInfo.id || (userPackageId !== basePackageId && allPackages[basePackageId] ? basePackageId : userPackageId)
+        filteredPackages[actualPackageId] = packageInfo
+      }
+      
+      console.log(`Package ${basePackageId} -> ${userPackageId}: duration ${selectedDuration} vs ${minNights}-${maxNights}, within: ${withinDuration}, season: ${seasonMatch}`)
+    })
+    
+    return filteredPackages
   }
 
   // Get packages from the centralized system with proper post integration
@@ -158,17 +255,23 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     console.log('effectivePost:', effectivePost)
     console.log('effectivePost?.baseRate:', effectivePost?.baseRate)
     console.log('effectivePost?.packageTypes:', effectivePost?.packageTypes)
+    console.log('_post (from estimate):', _post)
+    console.log('postData (from API fetch):', postData)
     
-    // Get the post's base rate as fallback
-    const postBaseRate = effectivePost?.baseRate || 150
-    console.log('Using postBaseRate:', postBaseRate)
+    // Get the post's base rate with proper fallback logic
+    // Use 150 only if baseRate is null, undefined, or NaN - NOT if it's 0
+    const postBaseRate = (typeof effectivePost?.baseRate === 'number' && !isNaN(effectivePost.baseRate)) 
+      ? effectivePost.baseRate 
+      : 150
+    console.log('Using postBaseRate:', postBaseRate, '(source:', effectivePost?.baseRate !== undefined ? 'effectivePost' : 'fallback', ')')
     
     // FIRST PRIORITY: Use post-specific packageTypes if they exist
     if (effectivePost?.packageTypes && Array.isArray(effectivePost.packageTypes) && effectivePost.packageTypes.length > 0) {
       const postPackages: Record<string, EnhancedPackageDetails> = {}
       effectivePost.packageTypes.forEach((pkg: any) => {
         const packageKey = pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_')
-        const packagePrice = pkg.price || postBaseRate
+        // Use package price if it's a valid number, otherwise use post baseRate
+        const packagePrice = (typeof pkg.price === 'number' && !isNaN(pkg.price)) ? pkg.price : postBaseRate
         console.log(`Package "${pkg.name}": price=${pkg.price}, using=${packagePrice}, baseRate=${postBaseRate}`)
         
         postPackages[packageKey] = {
@@ -254,18 +357,70 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     return `Showing ${availablePackages} of ${totalPackages} packages available for ${selectedDuration} night${selectedDuration !== 1 ? 's' : ''}`
   }
 
-  // Set initial selected package to the first available package
-  React.useEffect(() => {
-    if (!selectedPackage && Object.keys(packageDetails).length > 0) {
-      const firstPackageKey = Object.keys(packageDetails)[0]
-      setSelectedPackage(firstPackageKey || null)
+  // Add helper function to select the best package for a duration
+  const getBestPackageForDuration = (duration: number, packages: Record<string, EnhancedPackageDetails>): string | null => {
+    // Package priority for different durations
+    const packagePreferences = [
+      { min: 1, max: 1, preferred: ['per_night', 'luxury_night'] },
+      { min: 2, max: 3, preferred: ['three_nights', 'per_night', 'luxury_night'] },
+      { min: 4, max: 6, preferred: ['three_nights', 'per_night', 'luxury_night'] },
+      { min: 7, max: 7, preferred: ['weekly', 'three_nights', 'per_night'] },
+      { min: 8, max: 29, preferred: ['weekly', 'three_nights', 'per_night'] },
+      { min: 30, max: 365, preferred: ['monthly', 'weekly', 'per_night'] }
+    ]
+    
+    // Find the preference group for this duration
+    const preferenceGroup = packagePreferences.find(p => duration >= p.min && duration <= p.max)
+    if (!preferenceGroup) {
+      // Fallback to first available package
+      return Object.keys(packages)[0] || null
     }
-  }, [selectedPackage, packageDetails])
+    
+    // Try to find packages in order of preference
+    for (const preferredId of preferenceGroup.preferred) {
+      if (packages[preferredId]) {
+        console.log(`Selected ${preferredId} as best package for ${duration} nights`)
+        return preferredId
+      }
+    }
+    
+    // Fallback to first available package
+    const firstAvailable = Object.keys(packages)[0] || null
+    console.log(`Fallback to ${firstAvailable} for ${duration} nights`)
+    return firstAvailable
+  }
+
+  // Set initial selected package to the best match for duration
+  React.useEffect(() => {
+    const availablePackages = getFilteredPackages()
+    const bestPackage = getBestPackageForDuration(selectedDuration, availablePackages)
+    
+    // Only auto-select if user hasn't made a manual selection
+    if (!hasUserSelectedPackage) {
+      if (bestPackage && bestPackage !== selectedPackage) {
+        console.log(`Auto-selecting package ${bestPackage} for duration ${selectedDuration}`)
+        setSelectedPackage(bestPackage)
+      } else if (!selectedPackage && Object.keys(availablePackages).length > 0) {
+        // Fallback to first available if no best match
+        const firstPackageKey = Object.keys(availablePackages)[0]
+        console.log(`Fallback selecting first available package: ${firstPackageKey}`)
+        setSelectedPackage(firstPackageKey || null)
+      }
+    } else {
+      // If user has selected a package, check if it's still available
+      if (selectedPackage && !availablePackages[selectedPackage]) {
+        console.log(`User-selected package ${selectedPackage} no longer available, auto-selecting best alternative`)
+        setSelectedPackage(bestPackage)
+        setHasUserSelectedPackage(false) // Reset manual selection flag
+      }
+    }
+  }, [selectedDuration, packageDetails, hasUserSelectedPackage, selectedPackage]) // Include hasUserSelectedPackage in dependencies
 
   // Load RevenueCat offerings when initialized
   useEffect(() => {
     if (isInitialized) {
       loadOfferings()
+      checkSubscriptionStatus()
     }
   }, [isInitialized])
 
@@ -316,8 +471,32 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     }
   }
 
+  const checkSubscriptionStatus = async () => {
+    try {
+      if (!isInitialized) {
+        console.warn('RevenueCat not initialized, defaulting to free tier')
+        setUserHasSubscription(false)
+        return
+      }
+
+      const customerInfo = await Purchases.getSharedInstance().getCustomerInfo()
+      const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+      const hasActiveSubscription = activeEntitlements.length > 0
+      
+      setUserHasSubscription(hasActiveSubscription)
+      console.log('User subscription status:', { 
+        hasSubscription: hasActiveSubscription, 
+        entitlements: activeEntitlements 
+      })
+    } catch (error) {
+      console.error('Error checking subscription status:', error)
+      setUserHasSubscription(false)
+    }
+  }
+
   const handlePackageSelect = (packageId: string) => {
     setSelectedPackage(packageId)
+    setHasUserSelectedPackage(true) // Mark that user has made a manual selection
     const selectedPkg = packageDetails[packageId]
     if (selectedPkg) {
       // Use the package's price (which is either the package's custom price or post's baseRate)
@@ -355,29 +534,59 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     if (estimatePackage && estimatePackage.webBillingProduct) {
       const product = estimatePackage.webBillingProduct as RevenueCatProduct
       if (product.price) {
-        const basePrice = Number(product.price)
-        const multiplier = selectedPackageDetails.multiplier ?? 1.0
-        const calculatedPrice = basePrice * multiplier * selectedDuration
-        setPackagePrice(calculatedPrice)
-        console.log('Using RevenueCat pricing:', { basePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
+        const revenueCatPrice = Number(product.price)
+        
+        // RevenueCat packages have FIXED TOTAL PRICES (not per-night rates)
+        // So we should NOT multiply by duration for these packages
+        console.log('Using RevenueCat pricing (fixed total):', { 
+          revenueCatPrice, 
+          packageId: selectedPackageDetails.revenueCatId,
+          duration: selectedDuration,
+          note: 'Fixed total price, not multiplied by duration'
+        })
+        setPackagePrice(revenueCatPrice)
         return
       }
     }
 
     // Fallback to local pricing calculation using package price
+    // This is for packages not in RevenueCat or when RevenueCat is unavailable
     const packagePrice = selectedPackageDetails.price
     const multiplier = selectedPackageDetails.multiplier ?? 1.0
     const calculatedPrice = packagePrice * multiplier * selectedDuration
     setPackagePrice(calculatedPrice)
-    console.log('Using package pricing:', { packagePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
+    console.log('Using local package pricing:', { packagePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
   }, [selectedPackage, offerings, selectedDuration, packageDetails, effectivePost?.baseRate])
 
   const calculateTotalPrice = () => {
     // Calculate package price directly from selected package details
     let packageTotal = 0
+    let estimatePackage = null // Declare in proper scope
+    
     if (selectedPackage && packageDetails[selectedPackage]) {
       const selectedPkg = packageDetails[selectedPackage]
-      packageTotal = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+      
+      // Check if we have a RevenueCat package with fixed pricing
+      if (offerings.length > 0) {
+        estimatePackage = offerings.find(pkg => {
+          const identifier = pkg.webBillingProduct?.identifier;
+          return identifier === selectedPkg.revenueCatId;
+        });
+      }
+      
+      if (estimatePackage && estimatePackage.webBillingProduct) {
+        const product = estimatePackage.webBillingProduct as RevenueCatProduct
+        if (product.price) {
+          // Use fixed RevenueCat price (no duration multiplication)
+          packageTotal = Number(product.price)
+        } else {
+          // Fallback to calculated pricing
+          packageTotal = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+        }
+      } else {
+        // Use calculated pricing for local packages
+        packageTotal = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+      }
     }
     
     // Calculate wine package price if selected
@@ -392,6 +601,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
       winePrice, 
       total,
       selectedDuration,
+      hasRevenueCatPackage: !!estimatePackage,
       packageDetails: selectedPackage ? packageDetails[selectedPackage] : null
     })
     
@@ -493,7 +703,9 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           fromDate: data.fromDate,
           toDate: data.toDate,
           guests: Array.isArray(data.guests) ? data.guests.map(g => typeof g === 'string' ? g : g.id) : [],
-          baseRate: effectivePost?.baseRate || 150, // Send the post's base rate for backend calculations
+          baseRate: (typeof effectivePost?.baseRate === 'number' && !isNaN(effectivePost.baseRate)) 
+            ? effectivePost.baseRate 
+            : 150, // Send the post's base rate for backend calculations with proper fallback
           duration: selectedDuration,
           customer: user.id,
           packageType: selectedPackage,
@@ -513,7 +725,24 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         if (!response.ok) {
           const errorData = await response.json()
           console.error('Estimate confirmation error:', errorData)
-          throw new Error(errorData.error || 'Failed to confirm estimate')
+          
+          // Handle different types of errors with appropriate messaging
+          if (response.status === 403 && errorData.requiresSubscription) {
+            // Subscription required for enhanced packages
+            throw new Error(`${errorData.error} Click here to view subscription options.`)
+          } else if (response.status === 402 && errorData.requiresPayment) {
+            // Individual payment required for premium packages
+            throw new Error(`${errorData.error} Premium packages require individual purchase.`)
+          } else if (errorData.requiresSubscription) {
+            // Generic subscription required error
+            throw new Error(errorData.error || 'This package requires an active subscription.')
+          } else if (errorData.requiresPayment) {
+            // Generic payment required error
+            throw new Error(errorData.error || 'This package requires payment to proceed.')
+          } else {
+            // Other errors
+            throw new Error(errorData.error || 'Failed to confirm estimate')
+          }
         }
         
         const result = await response.json()
@@ -573,13 +802,22 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   }
 
   return (
-    <div className="container py-10">
+    <div className="container content-with-sticky-footer py-10">
       <h1 className="text-4xl font-bold tracking-tighter mb-8">Estimate Details</h1>
-      <Tabs defaultValue="details" className="max-w-screen-lg mx-auto">
+      <Tabs defaultValue="details" className="max-w-screen-lg mx-auto mobile-scroll-safe">
 
           {/* --- Summary Header Section --- */}
           <div className="pt-12 pb-6">
-            <div className="bg-muted p-6 rounded-lg border border-border mb-6 text-center">
+            <div className="bg-muted p-6 rounded-lg border border-border mb-6 text-center md:hidden">
+              <h2 className="text-2xl font-semibold mb-2">{formatPrice(calculateTotalPrice())}</h2>
+              <p className="text-base text-muted-foreground">{selectedDuration} nights total</p>
+              {isWineSelected && (
+                <p className="text-sm text-muted-foreground mt-1">Includes wine package add-on</p>
+              )}
+            </div>
+            
+            {/* Desktop summary - more detailed */}
+            <div className="hidden md:block bg-muted p-6 rounded-lg border border-border mb-6 text-center">
               <h2 className="text-3xl font-semibold mb-2">{formatPrice(calculateTotalPrice())}</h2>
               <p className="text-lg text-muted-foreground">Total for {selectedDuration} nights</p>
               {isWineSelected && (
@@ -658,7 +896,14 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           {/* --- Package Selection --- */}
           <div className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">Choose Your Package</h2>
-            <p className="text-muted-foreground mb-6">Select the package that best fits your stay duration and needs</p>
+            <p className="text-muted-foreground mb-6">
+              Select the package that best fits your stay duration and needs
+              {userHasSubscription && (
+                <span className="ml-2 text-blue-600 font-medium">
+                  ✨ Enhanced packages available with your subscription
+                </span>
+              )}
+            </p>
             
             {/* Package Filter Info */}
             {getPackageFilterInfo() && (
@@ -678,15 +923,44 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 const pkg = packageInfo as EnhancedPackageDetails
                 
                 const isSelected = selectedPackage === packageId
-                // Use the package's price field (which contains either package price or post baseRate)
-                const calculatedPrice = pkg.price * pkg.multiplier
-                const totalPrice = calculatedPrice * selectedDuration
+                const packageTier = getPackageTier(packageId)
+                const tierBadge = getTierBadgeInfo(packageTier)
+                
+                // Check if this package has a RevenueCat equivalent with fixed pricing
+                let revenueCatPackage = null
+                if (offerings.length > 0) {
+                  revenueCatPackage = offerings.find(rcPkg => {
+                    const identifier = rcPkg.webBillingProduct?.identifier;
+                    return identifier === pkg.revenueCatId;
+                  });
+                }
+                
+                let displayPrice, totalPrice, isFixedPrice = false
+                
+                if (revenueCatPackage && revenueCatPackage.webBillingProduct) {
+                  const product = revenueCatPackage.webBillingProduct as RevenueCatProduct
+                  if (product.price) {
+                    // RevenueCat package - fixed total price
+                    const fixedTotal = Number(product.price)
+                    displayPrice = fixedTotal / selectedDuration // Show as "per night" for comparison
+                    totalPrice = fixedTotal
+                    isFixedPrice = true
+                  } else {
+                    // Fallback to calculated pricing
+                    displayPrice = pkg.price * pkg.multiplier
+                    totalPrice = displayPrice * selectedDuration
+                  }
+                } else {
+                  // Local package - calculated pricing
+                  displayPrice = pkg.price * pkg.multiplier
+                  totalPrice = displayPrice * selectedDuration
+                }
                 
                 return (
                   <Card 
                     key={packageId}
                     className={cn(
-                      "cursor-pointer transition-all hover:shadow-lg",
+                      "cursor-pointer transition-all hover:shadow-lg relative",
                       isSelected 
                         ? "border-2 border-primary bg-primary/5 shadow-md" 
                         : "border hover:border-primary/50"
@@ -696,14 +970,23 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            {pkg.title}
-                            {isSelected && (
-                              <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                                <Check className="w-4 h-4 text-primary-foreground" />
-                              </div>
-                            )}
-                          </CardTitle>
+                          <div className="flex items-center gap-2 mb-2">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              {pkg.title}
+                              {isSelected && (
+                                <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                  <Check className="w-4 h-4 text-primary-foreground" />
+                                </div>
+                              )}
+                            </CardTitle>
+                            <Badge 
+                              variant="outline" 
+                              className={cn("text-xs flex items-center gap-1", tierBadge.className)}
+                            >
+                              <span>{tierBadge.icon}</span>
+                              {tierBadge.label}
+                            </Badge>
+                          </div>
                           <CardDescription className="text-sm mt-1">
                             {pkg.description}
                           </CardDescription>
@@ -726,22 +1009,43 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                       
                       {/* Package Pricing */}
                       <div className="mt-3 p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Base Rate:</span>
-                          <span>{formatPrice(pkg.price)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Multiplier:</span>
-                          <span>{pkg.multiplier}x</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm font-medium border-t pt-2 mt-2">
-                          <span>Per Night:</span>
-                          <span className="text-primary">{formatPrice(calculatedPrice)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-lg font-bold">
-                          <span>Total ({selectedDuration} nights):</span>
-                          <span className="text-primary">{formatPrice(totalPrice)}</span>
-                        </div>
+                        {isFixedPrice ? (
+                          // RevenueCat fixed pricing display
+                          <>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Package Type:</span>
+                              <span className="text-blue-600 font-medium">Fixed Total</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Avg per Night:</span>
+                              <span>{formatPrice(displayPrice)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-lg font-bold border-t pt-2 mt-2">
+                              <span>Total Package:</span>
+                              <span className="text-primary">{formatPrice(totalPrice)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          // Local calculated pricing display
+                          <>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Base Rate:</span>
+                              <span>{formatPrice(pkg.price)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Multiplier:</span>
+                              <span>{pkg.multiplier}x</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm font-medium border-t pt-2 mt-2">
+                              <span>Per Night:</span>
+                              <span className="text-primary">{formatPrice(displayPrice)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-lg font-bold">
+                              <span>Total ({selectedDuration} nights):</span>
+                              <span className="text-primary">{formatPrice(totalPrice)}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </CardHeader>
                     
@@ -751,15 +1055,15 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                           Features Included:
                         </h4>
                         <ul className="space-y-1">
-                          {pkg.features?.slice(0, 4).map((feature: string, index: number) => (
+                          {pkg.features?.slice(0, 3).map((feature: string, index: number) => (
                             <li key={index} className="flex items-start text-sm">
                               <Check className="mr-2 h-3 w-3 text-primary mt-0.5 flex-shrink-0" />
                               <span className="leading-tight">{feature}</span>
                             </li>
                           ))}
-                          {pkg.features?.length > 4 && (
+                          {pkg.features?.length > 3 && (
                             <li className="text-sm text-muted-foreground italic">
-                              +{pkg.features.length - 4} more features...
+                              +{pkg.features.length - 3} more features...
                             </li>
                           )}
                         </ul>
@@ -804,43 +1108,8 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 <h3 className="text-xl font-semibold mb-3 text-primary">
                   Selected: {packageDetails[selectedPackage]?.title}
                 </h3>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-medium mb-2">Complete Features List:</h4>
-                    <ul className="space-y-1">
-                      {packageDetails[selectedPackage]?.features?.map((feature: string, index: number) => (
-                        <li key={index} className="flex items-start text-sm">
-                          <Check className="mr-2 h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-2">Pricing Breakdown:</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Base Rate per Night:</span>
-                        <span>{formatPrice(packageDetails[selectedPackage]?.price || 0)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Package Multiplier:</span>
-                        <span>{packageDetails[selectedPackage]?.multiplier || 1}x</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Adjusted Rate per Night:</span>
-                        <span>{formatPrice((packageDetails[selectedPackage]?.price || 0) * (packageDetails[selectedPackage]?.multiplier || 1))}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Duration:</span>
-                        <span>{selectedDuration} nights</span>
-                      </div>
-                      <div className="flex justify-between font-bold text-lg border-t pt-2">
-                        <span>Total Package Price:</span>
-                        <span className="text-primary">{formatPrice(packagePrice || 0)}</span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="text-sm text-muted-foreground">
+                  {packageDetails[selectedPackage]?.description}
                 </div>
               </div>
             )}
@@ -880,16 +1149,6 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                       />
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-1">
-                      {packageDetails.wine_package.features && packageDetails.wine_package.features.map((feature: string, index: number) => (
-                        <li key={index} className="flex items-center text-sm">
-                          <Check className="mr-2 h-3 w-3 text-primary" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
                 </Card>
               </div>
             )}
@@ -949,48 +1208,45 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
         </TabsContent>
       </Tabs>
 
-        {/* --- Estimate Summary --- */}
-        <div className="mb-8 bg-muted p-6 rounded-lg border border-border">
-            <h2 className="text-2xl font-semibold mb-4">Estimate Summary</h2>
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-muted-foreground">Package:</span>
-              <span className="font-medium">
-                {selectedPackage ? packageDetails[selectedPackage as keyof typeof packageDetails]?.title : "Not selected"}
-              </span>
+      {/* Sticky Footer for Mobile / Bottom Summary for Desktop */}
+      <div className="sticky-footer md:bg-muted md:rounded-lg md:border md:mt-8">
+        <div className="sticky-footer-container">
+          {paymentError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800 text-sm">{paymentError}</p>
             </div>
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-muted-foreground">Package Total:</span>
-              <span className="font-medium">
-                {formatPrice(packagePrice)}
-              </span>
-            </div>
-            {isWineSelected && packageDetails.wine_package && (
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-muted-foreground">Wine Package Add-on:</span>
-                <span className="font-medium">
-                  {formatPrice(packageDetails.wine_package.price * packageDetails.wine_package.multiplier * selectedDuration)}
+          )}
+          
+          <div className="flex items-center justify-between gap-4">
+            {/* Price Display */}
+            <div className="flex flex-col">
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl md:text-2xl font-bold">
+                  {formatPrice(calculateTotalPrice())}
                 </span>
+                <span className="text-sm text-muted-foreground">total</span>
               </div>
-            )}
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-muted-foreground">Duration:</span>
-              <span className="font-medium">{selectedDuration} nights</span>
-            </div>
-            {paymentError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800 text-sm">{paymentError}</p>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
+                {selectedPackage && packageDetails[selectedPackage] && (
+                  <>
+                    <span>•</span>
+                    <span>{packageDetails[selectedPackage].title}</span>
+                  </>
+                )}
+                {isWineSelected && (
+                  <>
+                    <span>•</span>
+                    <span>Wine add-on</span>
+                  </>
+                )}
               </div>
-            )}
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-muted-foreground">Total:</span>
-              <span className="text-2xl font-bold">
-                {formatPrice(calculateTotalPrice())}
-              </span>
             </div>
+
             {/* Complete Estimate Button */}
             <Button
               onClick={handleEstimate}
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 text-base font-semibold px-6 py-3 h-auto min-w-[140px] md:min-w-[180px]"
               disabled={paymentLoading || paymentSuccess || !_postId || !selectedPackage}
             >
               {paymentLoading ? (
@@ -999,31 +1255,45 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                   Processing...
                 </>
               ) : paymentSuccess ? (
-                "Estimate Confirmed!"
+                "Confirmed!"
               ) : !_postId ? (
-                "Missing Property Information"
+                "Missing Info"
               ) : !selectedPackage ? (
-                "Please Select a Package"
+                "Select Package"
               ) : (
-                `Complete Estimate - ${formatPrice(calculateTotalPrice())}`
+                <>
+                  <span className="hidden md:inline">Complete Estimate</span>
+                  <span className="md:hidden">Book Now</span>
+                </>
               )}
             </Button>
+          </div>
+
+          {/* Error Messages */}
+          <div className="mt-2">
             {!_postId && (
-              <p className="text-red-500 text-sm mt-2">
+              <p className="text-red-500 text-xs">
                 Property information is missing. Please start from the property page.
               </p>
             )}
             {!selectedPackage && (
-              <p className="text-red-500 text-sm mt-2">
+              <p className="text-red-500 text-xs">
                 Please select a package to continue.
               </p>
             )}
             {paymentSuccess && (
-              <p className="text-green-600 text-sm mt-2 text-center">
-                🎉 Estimate confirmed successfully! Redirecting to booking confirmation...
+              <p className="text-green-600 text-xs text-center">
+                🎉 Estimate confirmed! Redirecting to booking confirmation...
+                {selectedPackage && getPackageTier(selectedPackage) === 'free' && (
+                  <span className="block mt-1 text-blue-600">
+                    💡 Subscribe for enhanced packages with premium support!
+                  </span>
+                )}
               </p>
             )}
           </div>
+        </div>
+      </div>
     </div>
   )
 } 

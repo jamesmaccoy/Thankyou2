@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import type { User, Post, Category } from "@/payload-types"
+import type { User, Post, Category, Booking } from "@/payload-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -23,12 +23,14 @@ import Image from 'next/image'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
 import { toast } from 'sonner'
-import { PACKAGE_TYPES, getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { PACKAGE_TYPES, getPackageById, getAllPackageTypes, getPackageIconComponent } from '@/lib/package-types'
+import { RoleUpgrade } from '@/components/RoleUpgrade'
 
 interface PlekAdminClientProps {
   user: User
   initialPosts: Post[]
   categories: Category[]
+  initialBookings: Booking[]
 }
 
 interface PackageType {
@@ -71,7 +73,7 @@ interface PackageFormProps {
   isEditing?: boolean
 }
 
-export default function PlekAdminClient({ user, initialPosts, categories }: PlekAdminClientProps) {
+export default function PlekAdminClient({ user, initialPosts, categories, initialBookings }: PlekAdminClientProps) {
   const router = useRouter()
   const [posts, setPosts] = useState<Post[]>(initialPosts)
   const [loading, setLoading] = useState(false)
@@ -79,6 +81,39 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
   const [success, setSuccess] = useState<string | null>(null)
   const [totalVisitors, setTotalVisitors] = useState<number>(0)
   
+  // Calculate booking statistics
+  const bookingStats = useMemo(() => {
+    const totalBookings = initialBookings.length
+    const packageTypeStats: Record<string, number> = {}
+    const categoryStats: Record<string, number> = {}
+    
+    initialBookings.forEach(booking => {
+      // Count package types
+      if (booking.packageType) {
+        packageTypeStats[booking.packageType] = (packageTypeStats[booking.packageType] || 0) + 1
+      }
+      
+      // Count package categories based on package details
+      if (booking.packageDetails?.category) {
+        categoryStats[booking.packageDetails.category] = (categoryStats[booking.packageDetails.category] || 0) + 1
+      } else if (booking.packageType) {
+        // Fallback: categorize based on package type
+        const packageInfo = getPackageById(booking.packageType)
+        if (packageInfo?.category) {
+          categoryStats[packageInfo.category] = (categoryStats[packageInfo.category] || 0) + 1
+        }
+      }
+    })
+    
+    return {
+      totalBookings,
+      packageTypeStats,
+      categoryStats,
+      mostPopularPackage: Object.entries(packageTypeStats).sort(([,a], [,b]) => b - a)[0]?.[0] || null,
+      hostedBookings: Object.entries(categoryStats).filter(([category]) => category === 'hosted').reduce((sum, [,count]) => sum + count, 0)
+    }
+  }, [initialBookings])
+
   // Initialize package templates inside component to avoid React Context issues
   const packageTemplates = useMemo(() => {
     const allPackageTypes = getAllPackageTypes()
@@ -1078,6 +1113,11 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
         </div>
       </div>
 
+      {/* Role Upgrade Section for customers who need to upgrade */}
+      <div className="mb-8">
+        <RoleUpgrade />
+      </div>
+
       {/* Alerts */}
       {error && (
         <Alert variant="destructive" className="mb-6">
@@ -1101,34 +1141,48 @@ export default function PlekAdminClient({ user, initialPosts, categories }: Plek
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{posts.length}</div>
+            <div className="text-2xl font-bold">{bookingStats.totalBookings}</div>
             <p className="text-xs text-muted-foreground">
-              {totalVisitors > 0 ? `${totalVisitors.toLocaleString()} total visitors` : ''}
+              {bookingStats.hostedBookings > 0 ? `${bookingStats.hostedBookings} hosted bookings` : 'All self-service bookings'}
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Published</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Most Popular Package</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{publishedPosts.length}</div>
+            <div className="text-2xl font-bold">
+              {bookingStats.mostPopularPackage ? 
+                getPackageById(bookingStats.mostPopularPackage)?.name || bookingStats.mostPopularPackage.replace(/_/g, ' ') : 
+                'N/A'
+              }
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {bookingStats.mostPopularPackage ? 
+                `${bookingStats.packageTypeStats[bookingStats.mostPopularPackage]} bookings` : 
+                'No bookings yet'
+              }
+            </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Drafts</CardTitle>
-            <Edit className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Published Pleks</CardTitle>
+            <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{draftPosts.length}</div>
+            <div className="text-2xl font-bold">{publishedPosts.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {draftPosts.length} drafts remaining
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -1995,19 +2049,22 @@ function PostForm({
           <div className="p-4 border rounded-lg bg-muted/50">
             <p className="text-sm font-medium mb-2">Quick Add Templates:</p>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => (
-                <Button
-                  key={key}
-                  type="button"
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => onAddPackageTemplate(key)}
-                  className="gap-1"
-                >
-                  <Package className="h-3 w-3" />
-                  {template.name}
-                </Button>
-              ))}
+              {Object.entries(getAllPackageTypes() || {}).map(([key, template]) => {
+                const PackageIcon = getPackageIconComponent(key)
+                return (
+                  <Button
+                    key={key}
+                    type="button"
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => onAddPackageTemplate(key)}
+                    className="gap-1"
+                  >
+                    <PackageIcon className="h-3 w-3" />
+                    {template.name}
+                  </Button>
+                )
+              })}
             </div>
           </div>
 

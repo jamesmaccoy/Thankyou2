@@ -74,6 +74,7 @@ export interface Config {
     media: Media;
     categories: Category;
     users: User;
+    authRequests: AuthRequest;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -92,6 +93,7 @@ export interface Config {
     media: MediaSelect<false> | MediaSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
+    authRequests: AuthRequestsSelect<false> | AuthRequestsSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -146,6 +148,8 @@ export interface UserAuthOperations {
   };
 }
 /**
+ * 📅 Manage your Plek bookings and guest reservations
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "bookings".
  */
@@ -228,7 +232,7 @@ export interface Booking {
 export interface User {
   id: string;
   name?: string | null;
-  role: ('admin' | 'customer' | 'guest')[];
+  role?: ('admin' | 'customer' | 'host' | 'guest')[] | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -241,11 +245,16 @@ export interface User {
   password?: string | null;
 }
 /**
+ * 🏠 Create and manage your unique Pleks - your personal spaces for guests to discover and book
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts".
  */
 export interface Post {
   id: string;
+  /**
+   * Give your Plek a memorable name that guests will love (e.g., "Cozy Mountain Retreat", "Urban Garden Oasis")
+   */
   title: string;
   heroImage?: (string | null) | Media;
   content: {
@@ -301,8 +310,11 @@ export interface Post {
               | 'hosted_3nights'
               | 'weekly'
               | 'hosted_weekly'
-              | 'monthly'
               | 'wine_package'
+              | 'per_night_customer'
+              | 'three_nights_customer'
+              | 'weekly_customer'
+              | 'monthly'
             )
           | null;
         /**
@@ -474,6 +486,8 @@ export interface Category {
   createdAt: string;
 }
 /**
+ * 💰 Review pricing estimates and booking inquiries for your Pleks
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "estimates".
  */
@@ -905,6 +919,18 @@ export interface Form {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "authRequests".
+ */
+export interface AuthRequest {
+  id: string;
+  email: string;
+  code: string;
+  expiresAt: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
 export interface Redirect {
@@ -1103,6 +1129,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'users';
         value: string | User;
+      } | null)
+    | ({
+        relationTo: 'authRequests';
+        value: string | AuthRequest;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1548,6 +1578,17 @@ export interface UsersSelect<T extends boolean = true> {
   hash?: T;
   loginAttempts?: T;
   lockUntil?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "authRequests_select".
+ */
+export interface AuthRequestsSelect<T extends boolean = true> {
+  email?: T;
+  code?: T;
+  expiresAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

@@ -11,7 +11,8 @@ import {
 
 import { authenticated } from '../../access/authenticated'
 import { authenticatedOrPublished } from '../../access/authenticatedOrPublished'
-import { adminOrCustomer } from '../../access/adminOrCustomer'
+import { hostOrCustomer } from '../../access/adminOrCustomer'
+import { isAdminOrCreatedBy } from '../../access/isAdmin'
 import { Banner } from '../../blocks/Banner/config'
 import { Code } from '../../blocks/Code/config'
 import { MediaBlock } from '../../blocks/MediaBlock/config'
@@ -28,34 +29,123 @@ import {
 } from '@payloadcms/plugin-seo/fields'
 import { slugField } from '../../fields/slug'
 import { getAllPackageTypes, PACKAGE_TYPES } from '@/lib/package-types'
+import { requiresSubscriptionForAdmin } from '../../access/requiresSubscription'
+import { PayloadRequest } from 'payload'
 
 export const Posts: CollectionConfig<'posts'> = {
   slug: 'posts',
   access: {
-    create: adminOrCustomer,
-    delete: ({ req: { user } }) => {
+    create: async ({ req }: { req: PayloadRequest }) => {
+      // Definitive access control for Plek creation with subscription check
+      const { user } = req
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
-        return {
-          authors: {
-            contains: user.id,
-          },
+      
+      const roles = user.role || []
+      
+      // Admins bypass subscription check
+      if (roles.includes('admin')) {
+        return true
+      }
+      
+      // For hosts and customers, require active subscription
+      if (roles.includes('host') || roles.includes('customer')) {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for create access')
+            return false
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for active entitlements
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasActiveSubscription = activeEntitlements.length > 0
+          
+          return hasActiveSubscription
+        } catch (error) {
+          console.error('Subscription check error for create access:', error)
+          return false
         }
       }
+      
       return false
     },
     read: authenticatedOrPublished,
     update: ({ req: { user } }) => {
       if (!user) return false
-      if (user.role?.includes('admin')) return true
-      if (user.role?.includes('customer')) {
+      const roles = user.role || []
+      
+      // Allow admins full access
+      if (roles.includes('admin')) return true
+      
+      // Allow hosts and customers to update their own posts
+      if (roles.includes('host') || roles.includes('customer')) {
         return {
           authors: {
             contains: user.id,
           },
         }
       }
+      
+      return false
+    },
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      const roles = user.role || []
+      
+      // Allow admins full access
+      if (roles.includes('admin')) return true
+      
+      // Allow hosts and customers to delete their own posts
+      if (roles.includes('host') || roles.includes('customer')) {
+        return {
+          authors: {
+            contains: user.id,
+          },
+        }
+      }
+      
+      return false
+    },
+    // Adding subscription-enforced admin access control
+    admin: async ({ req }: { req: PayloadRequest }) => {
+      const { user } = req
+      if (!user) return false
+      
+      const roles = user.role || []
+      
+      // Admins bypass subscription check
+      if (roles.includes('admin')) {
+        return true
+      }
+      
+      // For hosts and customers, check subscription
+      if (roles.includes('host') || roles.includes('customer')) {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY
+          if (!apiKey) {
+            console.error('RevenueCat API key missing for admin access')
+            return false
+          }
+          
+          const { Purchases } = await import('@revenuecat/purchases-js')
+          const purchases = Purchases.configure(apiKey, user.id)
+          const customerInfo = await purchases.getCustomerInfo()
+          
+          // Check for active entitlements
+          const activeEntitlements = Object.keys(customerInfo.entitlements.active || {})
+          const hasActiveSubscription = activeEntitlements.length > 0
+          
+          return hasActiveSubscription
+        } catch (error) {
+          console.error('Subscription check error for admin access:', error)
+          return false
+        }
+      }
+      
       return false
     },
   },
@@ -75,9 +165,13 @@ export const Posts: CollectionConfig<'posts'> = {
     hidden: ({ user }) => {
       if (!user) return true
       const roles = user.role || []
-      return !roles.includes('admin') && !roles.includes('customer')
+      return !roles.includes('admin') && !roles.includes('host') && !roles.includes('customer')
     },
     defaultColumns: ['title', 'slug', 'updatedAt'],
+    group: 'Plek Creator',
+    useAsTitle: 'title',
+    description: '🏠 Create and manage your unique Pleks - your personal spaces for guests to discover and book',
+    listSearchableFields: ['title', 'slug'],
     livePreview: {
       url: ({ data, req }) => {
         const path = generatePreviewPath({
@@ -95,13 +189,16 @@ export const Posts: CollectionConfig<'posts'> = {
         collection: 'posts',
         req,
       }),
-    useAsTitle: 'title',
   },
   fields: [
     {
       name: 'title',
       type: 'text',
       required: true,
+      label: 'Plek Name',
+      admin: {
+        description: 'Give your Plek a memorable name that guests will love (e.g., "Cozy Mountain Retreat", "Urban Garden Oasis")',
+      },
     },
     {
       type: 'tabs',
@@ -372,10 +469,19 @@ export const Posts: CollectionConfig<'posts'> = {
   ],
   hooks: {
     beforeChange: [
-      (args) => {
+      ({ data, operation, req }) => {
+        // Auto-assign current user as author when creating a new post
+        if (operation === 'create' && req.user) {
+          const currentAuthors = data.authors || []
+          // Only add the user if they're not already in the authors list
+          if (!currentAuthors.includes(req.user.id)) {
+            data.authors = [...currentAuthors, req.user.id]
+          }
+        }
+        
         // Removed auto-population to prevent recursion issues
         // Package template selection can be handled in the frontend
-        return args.data
+        return data
       },
     ],
     afterChange: [revalidatePost],

@@ -184,7 +184,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           // Use post's baseRate if package price is empty/undefined
           const packagePrice = (pkg.price !== undefined && pkg.price !== null && pkg.price !== '') 
             ? Number(pkg.price) 
-            : (cleanData.baseRate || 150) // Fallback to baseRate or 150 if no baseRate
+            : ((typeof cleanData.baseRate === 'number' && !isNaN(cleanData.baseRate)) 
+               ? cleanData.baseRate 
+               : 150) // Fallback to baseRate or 150 if no baseRate
           
           // Handle features array safely to prevent circular references
           let features = []

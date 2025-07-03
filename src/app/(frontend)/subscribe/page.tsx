@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 
 export default function SubscribePage() {
   const router = useRouter()
-  const { currentUser } = useUserContext()
+  const { currentUser, handleAuthChange } = useUserContext()
   const { customerInfo, isInitialized } = useRevenueCat()
   const { isSubscribed, isLoading } = useSubscription()
   const [offerings, setOfferings] = useState<Offering[]>([])
@@ -25,7 +25,7 @@ export default function SubscribePage() {
 
   useEffect(() => {
     if (!isLoading && isSubscribed) {
-      console.log('User already subscribed, redirecting to /admin from useEffect.')
+      console.log('User already subscribed, redirecting to /bookings from useEffect.')
       router.push('/bookings')
     }
   }, [isLoading, isSubscribed, router])
@@ -54,7 +54,32 @@ export default function SubscribePage() {
       await Purchases.getSharedInstance().purchase({
         rcPackage: pkg
       })
-      router.push('/admin')
+      
+      // After successful purchase, attempt to upgrade role automatically
+      try {
+        const upgradeResponse = await fetch('/api/upgrade-role', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ targetRole: 'host' }),
+        })
+        
+        if (upgradeResponse.ok) {
+          // Role upgrade succeeded, refresh user context
+          await handleAuthChange()
+          console.log('Role upgrade successful after purchase')
+        } else {
+          console.log('Role upgrade failed or not yet ready, user can upgrade later')
+        }
+      } catch (upgradeError) {
+        console.log('Role upgrade attempt failed, user can upgrade later:', upgradeError)
+        // Don't show error to user - they can upgrade manually later
+      }
+      
+      // Redirect to admin page which accepts both customer and host roles
+      router.push('/plek/adminPage')
     } catch (purchaseError) {
       const rcError = purchaseError as PurchasesError
       console.error('RevenueCat Purchase Error (Full Object):', rcError)
@@ -122,7 +147,7 @@ export default function SubscribePage() {
               </p>
               <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-muted-foreground xl:mt-10">
                 <li className="flex gap-x-3">Calendar booking request</li>
-                <li className="flex gap-x-3">Curated unique solutions</li>
+                <li className="flex gap-x-3">Curated unique packages</li>
                 <li className="flex gap-x-3">Invite guests</li>
               </ul>
               <button
@@ -150,9 +175,9 @@ export default function SubscribePage() {
               </p>
               <ul role="list" className="mt-8 space-y-3 text-sm leading-6 text-muted-foreground xl:mt-10">
                 <li className="flex gap-x-3">Calendar booking request</li>
-                <li className="flex gap-x-3">Curated unique solutions</li>
+                <li className="flex gap-x-3">Curated unique packages</li>
                 <li className="flex gap-x-3">Invite guests</li>
-                <li className="flex gap-x-3">2 X Free Presentation calls</li>
+                <li className="flex gap-x-3">Welcome meeting</li>
               </ul>
               <button
                 onClick={() => handlePurchase(annualPlan)}
@@ -192,7 +217,7 @@ export default function SubscribePage() {
                     <li className="flex gap-x-3">Insight report</li>
                     <li className="flex gap-x-3">Calendar booking request</li>
                     <li className="flex gap-x-3">Short term lease agreement</li>
-                    <li className="flex gap-x-3">Privacy from guests</li>
+                    <li className="flex gap-x-3">Estimates for guests</li>
                   </ul>
                   <button
                     onClick={() => handlePurchase(professionalPlan)}

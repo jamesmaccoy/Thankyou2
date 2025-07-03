@@ -12,7 +12,7 @@ import { useRevenueCat } from '@/providers/RevenueCat'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Calendar } from '@/components/ui/calendar'
 import { DateRange } from 'react-day-picker'
-import { getPackageById, getAllPackageTypes } from '@/lib/package-types'
+import { getPackageById, getAllPackageTypes, getPackageIconComponent } from '@/lib/package-types'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
 type Props = {
@@ -203,7 +203,13 @@ export default function BookingDetailsClientPage({ data, user }: Props) {
                   {data?.packageType && (
                     <Card className="border-primary/20 bg-primary/5">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-sm text-primary">Package Purchased</CardTitle>
+                        <CardTitle className="text-sm text-primary flex items-center gap-2">
+                          {(() => {
+                            const PackageIcon = getPackageIconComponent(data.packageType)
+                            return <PackageIcon className="h-4 w-4" />
+                          })()}
+                          Package Purchased
+                        </CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0">
                         {(() => {

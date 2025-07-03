@@ -1,3 +1,38 @@
+import React from 'react'
+import { 
+  Camera, 
+  Crown, 
+  CalendarDays, 
+  UserCheck, 
+  CalendarRange, 
+  Calendar, 
+  Wine, 
+  Package as PackageIcon,
+  LucideIcon,
+  Star,
+  Briefcase
+} from 'lucide-react'
+
+// Icon mapping for package types
+const ICON_MAP: Record<string, LucideIcon> = {
+  camera: Camera,
+  crown: Crown,
+  'calendar-days': CalendarDays,
+  'user-check': UserCheck,
+  'calendar-range': CalendarRange,
+  calendar: Calendar,
+  wine: Wine,
+  package: PackageIcon,
+  star: Star,
+  briefcase: Briefcase
+}
+
+// Get icon component for a package type
+export const getPackageIconComponent = (packageTypeId: string): LucideIcon => {
+  const iconName = getPackageIcon(packageTypeId)
+  return ICON_MAP[iconName] || PackageIcon
+}
+
 export interface PackageType {
   id: string
   name: string
@@ -9,6 +44,7 @@ export interface PackageType {
   maxNights?: number
   isHosted?: boolean
   category: 'standard' | 'luxury' | 'hosted' | 'specialty'
+  icon: string // Lucide icon name
 }
 
 export interface PackageTypeTemplate {
@@ -21,6 +57,7 @@ export interface PackageTypeTemplate {
   maxNights?: number
   isHosted?: boolean
   category: 'standard' | 'luxury' | 'hosted' | 'specialty'
+  icon: string // Lucide icon name
 }
 
 // Centralized package types definition based on Plek's core offerings
@@ -39,7 +76,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "per_night",
     minNights: 1,
     maxNights: 1,
-    category: 'standard'
+    category: 'standard',
+    icon: 'camera'
   },
 
   // Luxury Packages
@@ -59,7 +97,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 1,
     maxNights: 1,
     isHosted: true,
-    category: 'luxury'
+    category: 'luxury',
+    icon: 'crown'
   },
 
   // Multi-night Packages
@@ -77,7 +116,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "3nights",
     minNights: 3,
     maxNights: 3,
-    category: 'standard'
+    category: 'standard',
+    icon: 'calendar-days'
   },
 
   hosted_3nights: {
@@ -97,7 +137,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 3,
     maxNights: 3,
     isHosted: true,
-    category: 'hosted'
+    category: 'hosted',
+    icon: 'user-check'
   },
 
   // Weekly Packages
@@ -116,7 +157,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "Weekly",
     minNights: 7,
     maxNights: 7,
-    category: 'standard'
+    category: 'standard',
+    icon: 'calendar-range'
   },
 
   hosted_weekly: {
@@ -137,10 +179,98 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     minNights: 7,
     maxNights: 7,
     isHosted: true,
-    category: 'hosted'
+    category: 'hosted',
+    icon: 'user-check'
   },
 
-  // Extended Stay Packages
+  // Specialty Packages
+  wine_package: {
+    name: "Wine Sommelier Package",
+    description: "Specialized wine experience add-on for any stay",
+    multiplier: 1.5,
+    features: [
+      "Professional wine sommelier",
+      "Curated wine selection",
+      "Daily wine tastings",
+      "Wine pairing consultation",
+      "Premium glassware provided",
+      "Wine education sessions"
+    ],
+    revenueCatId: "Bottle_wine",
+    category: 'specialty',
+    icon: 'wine'
+  },
+
+  // Customer (Paid) Packages - Enhanced versions with premium features
+  per_night_customer: {
+    name: "Per Night Pro",
+    description: "Enhanced nightly experience with priority support and premium amenities",
+    multiplier: 1.0,
+    features: [
+      "Photo studio access",
+      "Premium lighting equipment",
+      "Priority booking support",
+      "24/7 customer service",
+      "Enhanced cleaning service",
+      "Welcome package included",
+      "Free cancellation up to 24h",
+      "Equipment setup assistance"
+    ],
+    revenueCatId: "per_night_pro",
+    minNights: 1,
+    maxNights: 1,
+    category: 'standard',
+    icon: 'star'
+  },
+
+  three_nights_customer: {
+    name: "3 Nights Pro Package",
+    description: "Enhanced three-night experience with premium support and exclusive perks",
+    multiplier: 0.95,
+    features: [
+      "3 nights accommodation",
+      "Premium photo studio access",
+      "Professional equipment included",
+      "5% discount on total",
+      "Priority customer support",
+      "Daily housekeeping",
+      "Concierge service",
+      "Welcome amenities package",
+      "Free equipment tutorials",
+      "Flexible check-in/out times"
+    ],
+    revenueCatId: "3nights_pro",
+    minNights: 3,
+    maxNights: 3,
+    category: 'standard',
+    icon: 'crown'
+  },
+
+  weekly_customer: {
+    name: "Weekly Pro Package",
+    description: "Premium week-long experience with dedicated support and enhanced amenities",
+    multiplier: 0.85,
+    features: [
+      "7 nights accommodation",
+      "Extended photo studio access",
+      "Professional equipment storage",
+      "15% discount on total",
+      "Dedicated account manager",
+      "Daily housekeeping service",
+      "Priority booking for future stays",
+      "Equipment maintenance included",
+      "Professional consultation sessions",
+      "Enhanced workspace setup",
+      "Complimentary local experiences"
+    ],
+    revenueCatId: "weekly_pro",
+    minNights: 7,
+    maxNights: 7,
+    category: 'standard',
+    icon: 'briefcase'
+  },
+
+  // Monthly Packages
   monthly: {
     name: "Monthly Package",
     description: "Extended month-long stay with winter benefits",
@@ -158,24 +288,8 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     revenueCatId: "monthly",
     minNights: 30,
     maxNights: 90,
-    category: 'standard'
-  },
-
-  // Specialty Packages
-  wine_package: {
-    name: "Wine Sommelier Package",
-    description: "Specialized wine experience add-on for any stay",
-    multiplier: 1.5,
-    features: [
-      "Professional wine sommelier",
-      "Curated wine selection",
-      "Daily wine tastings",
-      "Wine pairing consultation",
-      "Premium glassware provided",
-      "Wine education sessions"
-    ],
-    revenueCatId: "Bottle_wine",
-    category: 'specialty'
+    category: 'standard',
+    icon: 'calendar'
   }
 } as const
 
@@ -230,4 +344,10 @@ export const getAllPackageTypes = (): Record<string, PackageType> => {
       createPackageFromTemplate(id, template)
     ])
   )
+}
+
+// Get icon name for a package type
+export const getPackageIcon = (packageTypeId: string): string => {
+  const packageType = getPackageById(packageTypeId)
+  return packageType?.icon || 'package'
 } 

@@ -52,7 +52,7 @@ export const homeStatic: RequiredDataFromCollectionSlug<'pages'> = {
                 fields: {
                   linkType: 'custom',
                   newTab: false,
-                  url: '/admin',
+                  url: '/host',
                 },
                 format: '',
                 indent: 0,
