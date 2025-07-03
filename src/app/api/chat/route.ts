@@ -46,6 +46,14 @@ export async function POST(req: Request) {
       toDate: new Date(booking.toDate).toLocaleDateString(),
       status: booking.paymentStatus,
       packageName: booking.packageDetails?.name || booking.packageType || '',
+      guests: Array.isArray(booking.guests)
+        ? booking.guests
+            .map((guest) =>
+              typeof guest === 'object' && guest !== null && 'name' in guest ? guest.name : null,
+            )
+            .filter(Boolean)
+            .join(', ')
+        : '',
     }))
 
     const estimatesInfo = estimates.docs.map((estimate) => ({
@@ -58,6 +66,14 @@ export async function POST(req: Request) {
       status: estimate.paymentStatus,
       packageName: estimate.packageType || '',
       link: `${process.env.NEXT_PUBLIC_URL}/estimate/${estimate.id}`,
+      guests: Array.isArray(estimate.guests)
+        ? estimate.guests
+            .map((guest) =>
+              typeof guest === 'object' && guest !== null && 'name' in guest ? guest.name : null,
+            )
+            .filter(Boolean)
+            .join(', ')
+        : '',
     }))
 
     // Create a context with the user's data
@@ -88,7 +104,7 @@ export async function POST(req: Request) {
               Estimates:
               ${JSON.stringify(context.estimates, null, 2)}
               
-              Help users with their bookings and provide information about estimates based on their actual data. Always mention the package name for both bookings and estimates (use the 'packageName' property). For estimate details, never print the raw link; always provide a clickable link as <a href=\"[link]\">click here</a> using the 'link' property. Don't use asterisks in your response, only speak words and skip symbols. Never read out booking or estimate IDs, but remain knowledgeable about the package types and features. If there are duplicate estimates, list only once. Do not mention the post property, only use the title for reference.`,
+              Help users with their bookings and provide information about estimates based on their actual data. Always mention the package name for both bookings and estimates (use the 'packageName' property). For estimate details, never print the raw link; always provide a clickable link as <a href=\"[link]\">click here</a> using the 'link' property. Don't use asterisks in your response, only speak words and skip symbols. Never read out booking or estimate IDs, but remain knowledgeable about the package types and features. If there are duplicate estimates, list only once. Do not mention the post property, only use the title for reference. When a user asks about a booking or estimate, always mention the guest names (from the 'guests' property) if available. If there are no guests, you may skip this detail.`,
             },
           ],
         },
