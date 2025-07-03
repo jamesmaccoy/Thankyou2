@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -23,8 +23,9 @@ import Image from 'next/image'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
 import { toast } from 'sonner'
-import { PACKAGE_TYPES, getPackageById, getPackageIconComponent } from '@/lib/package-types'
+import { PACKAGE_TYPES, getPackageById, getPackageIconComponent, getPackageTemplateForUser, getUserTierFromEntitlements, getAvailablePackagesForUser, type BaseTemplate } from '@/lib/package-types'
 import { RoleUpgrade } from '@/components/RoleUpgrade'
+import { useSubscription } from '@/hooks/useSubscription'
 
 interface PlekAdminClientProps {
   user: User
@@ -73,6 +74,75 @@ interface PackageFormProps {
   isEditing?: boolean
 }
 
+// Package Mapping Visualization Component
+function PackageMappingVisualization({ userEntitlements }: { userEntitlements: string[] }) {
+  const userTier = getUserTierFromEntitlements(userEntitlements)
+  const availablePackages = getAvailablePackagesForUser(userEntitlements)
+  const baseTemplates: BaseTemplate[] = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package']
+
+  const tierColors = {
+    guest: 'bg-gray-100 text-gray-800',
+    standard: 'bg-blue-100 text-blue-800',
+    pro: 'bg-purple-100 text-purple-800',
+    luxury: 'bg-amber-100 text-amber-800'
+  }
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Package Mapping for Your Tier
+        </CardTitle>
+        <CardDescription>
+          Based on your entitlements: {userEntitlements.length > 0 ? userEntitlements.join(', ') : 'None'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-sm font-medium">Your Tier:</span>
+            <Badge className={tierColors[userTier]}>{userTier.toUpperCase()}</Badge>
+          </div>
+          
+          <div className="grid gap-3">
+            {baseTemplates.map(baseTemplate => {
+              const selectedPackage = getPackageTemplateForUser(baseTemplate, userEntitlements)
+              const packageInfo = getPackageById(selectedPackage)
+              
+              return (
+                <div key={baseTemplate} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <span className="font-medium capitalize">{baseTemplate.replace('_', ' ')}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">→</span>
+                    <Badge variant="outline">{packageInfo?.name || selectedPackage}</Badge>
+                    {packageInfo?.revenueCatId && (
+                      <span className="text-xs text-gray-500">({packageInfo.revenueCatId})</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>How it works:</strong> When you add a template, the system automatically selects the best package variant for your subscription tier. 
+              {userTier === 'guest' && ' Upgrade your subscription to access enhanced packages!'}
+              {userTier === 'standard' && ' You have access to standard packages.'}
+              {userTier === 'pro' && ' You have access to enhanced customer packages!'}
+              {userTier === 'luxury' && ' You have access to all luxury packages!'}
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function PlekAdminClient({ user, initialPosts, categories, initialBookings }: PlekAdminClientProps) {
   const router = useRouter()
   const [posts, setPosts] = useState<Post[]>(initialPosts)
@@ -80,6 +150,9 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [totalVisitors, setTotalVisitors] = useState<number>(0)
+  
+  // Get user subscription status for package mapping
+  const { entitlements, isLoading: isLoadingSubscription } = useSubscription()
   
   // Calculate booking statistics
   const bookingStats = useMemo(() => {
@@ -394,18 +467,36 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
 
   const addPackageTemplate = useCallback((templateKey: string) => {
     console.log('addPackageTemplate called:', { templateKey, currentPackages: formData.packageTypes })
-    if (templateKey in packageTemplates) {
-      const newPackage = createPackageFromTemplate(templateKey)
+    
+    // Determine the appropriate package based on user entitlements
+    const appropriatePackageKey = getPackageTemplateForUser(templateKey as BaseTemplate, entitlements)
+    console.log('Package mapping:', { 
+      baseTemplate: templateKey, 
+      userEntitlements: entitlements, 
+      selectedPackage: appropriatePackageKey 
+    })
+    
+    if (appropriatePackageKey in packageTemplates) {
+      const newPackage = createPackageFromTemplate(appropriatePackageKey)
       // Use empty string as default - let the system use baseRate from post
       newPackage.price = ''
-      console.log('Adding template package:', newPackage)
+      console.log('Adding subscription-appropriate package:', newPackage)
       const newPackageTypes = [...formData.packageTypes, newPackage]
       console.log('New packageTypes with template:', newPackageTypes)
       updateFormDataImmediate({ 
         packageTypes: newPackageTypes
       })
+      
+      // Show success message indicating which package was added
+      const packageTemplate = getPackageById(appropriatePackageKey)
+      if (packageTemplate) {
+        toast.success(`Added ${packageTemplate.name} package template`)
+      }
+    } else {
+      console.error('Package template not found:', appropriatePackageKey)
+      toast.error('Package template not found. Please try again.')
     }
-  }, [formData.packageTypes, updateFormDataImmediate])
+  }, [formData.packageTypes, updateFormDataImmediate, entitlements, packageTemplates, createPackageFromTemplate])
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -470,13 +561,13 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
       
       // Filter and process packageTypes
       const rawPackageTypes = formData.packageTypes.filter(pkg => 
-        pkg.name && pkg.price !== ''
+        pkg.name && pkg.name.trim() !== ''
       )
       
       const processedPackageTypes = rawPackageTypes.map(pkg => ({
         name: pkg.name,
         description: pkg.description,
-        price: Number(pkg.price),
+        price: pkg.price === '' ? 0 : Number(pkg.price),
         multiplier: pkg.multiplier,
         features: pkg.features.filter(f => f && f.trim()),
         revenueCatId: pkg.revenueCatId,
@@ -701,13 +792,13 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
 
       // Add packageTypes to the post data
       const rawPackageTypes = formData.packageTypes.filter(pkg => 
-        pkg.name && pkg.price !== ''
+        pkg.name && pkg.name.trim() !== ''
       )
       
       const processedPackageTypes = rawPackageTypes.map(pkg => ({
         name: pkg.name,
         description: pkg.description,
-        price: Number(pkg.price),
+        price: pkg.price === '' ? 0 : Number(pkg.price),
         multiplier: pkg.multiplier,
         features: pkg.features.filter(f => f && f.trim()),
         revenueCatId: pkg.revenueCatId,
@@ -1256,6 +1347,7 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
             onRemovePackageType={removePackageType}
             onAddPackageTemplate={addPackageTemplate}
             isAdmin={isAdmin}
+            userEntitlements={entitlements}
           />
           
           <DialogFooter>
@@ -1295,6 +1387,7 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
             onAddPackageTemplate={addPackageTemplate}
             isEditing={true}
             isAdmin={isAdmin}
+            userEntitlements={entitlements}
           />
           
           <DialogFooter>
@@ -1668,7 +1761,8 @@ function PostForm({
   onRemovePackageType,
   onAddPackageTemplate,
   isEditing = false,
-  isAdmin = false
+  isAdmin = false,
+  userEntitlements = []
 }: {
   formData: PostFormData
   setFormData: (data: PostFormData) => void
@@ -1684,6 +1778,7 @@ function PostForm({
   onAddPackageTemplate: (templateKey: string) => void
   isEditing?: boolean
   isAdmin?: boolean
+  userEntitlements?: string[]
 }) {
   return (
     <Tabs defaultValue="details" className="w-full">
@@ -2035,7 +2130,9 @@ function PostForm({
       </TabsContent>
 
       <TabsContent value="packages" className="space-y-6 mt-6">
-        {/* Package Types Section */}
+        {/* Package Mapping Visualization */}
+        <PackageMappingVisualization userEntitlements={userEntitlements} />
+        
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">Package Types</h3>

@@ -447,11 +447,62 @@ export function getRevenueCatIdForPackage(baseTemplate: BaseTemplate, userTier: 
   return tierMapping?.revenueCatId || null
 }
 
-export function getDurationVariant(numberOfNights: number): string | undefined {
-  if (numberOfNights === 14) return 'x2'  // 2 weeks
-  if (numberOfNights === 21) return 'x3'  // 3 weeks  
-  if (numberOfNights === 28) return 'x4'  // 4 weeks
-  return undefined
+// Helper function to determine user tier from entitlements
+export function getUserTierFromEntitlements(entitlements: string[]): UserTier {
+  const activeEntitlements = entitlements.map(e => e.toLowerCase())
+  
+  // Check for luxury tier first (highest priority)
+  if (activeEntitlements.some(e => e.includes('luxury') || e.includes('hosted'))) {
+    return 'luxury'
+  }
+  
+  // Check for pro tier
+  if (activeEntitlements.some(e => e.includes('pro') || e.includes('premium') || e.includes('customer'))) {
+    return 'pro'
+  }
+  
+  // Check for any active subscription (standard tier)
+  if (activeEntitlements.length > 0) {
+    return 'standard'
+  }
+  
+  // No active entitlements - guest tier
+  return 'guest'
+}
+
+// Helper function to get the appropriate package template key for user's tier
+export function getPackageTemplateForUser(baseTemplate: BaseTemplate, userEntitlements: string[]): string {
+  const userTier = getUserTierFromEntitlements(userEntitlements)
+  const packageId = getPackageForUserTier(baseTemplate, userTier)
+  
+  // Return the package ID if it exists in PACKAGE_TYPES, otherwise fallback to base template
+  if (packageId && PACKAGE_TYPES[packageId]) {
+    return packageId
+  }
+  
+  // Fallback to the base template if the mapped package doesn't exist
+  return baseTemplate
+}
+
+// Helper function to get all available packages for a user based on their entitlements
+export function getAvailablePackagesForUser(userEntitlements: string[]): Record<string, PackageTypeTemplate> {
+  const userTier = getUserTierFromEntitlements(userEntitlements)
+  const availablePackages: Record<string, PackageTypeTemplate> = {}
+  
+  // Get all base templates
+  const baseTemplates: BaseTemplate[] = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package']
+  
+  baseTemplates.forEach(baseTemplate => {
+    const packageId = getPackageForUserTier(baseTemplate, userTier)
+    if (packageId && PACKAGE_TYPES[packageId]) {
+      availablePackages[packageId] = PACKAGE_TYPES[packageId]
+    } else if (PACKAGE_TYPES[baseTemplate]) {
+      // Fallback to base template if tier-specific package doesn't exist
+      availablePackages[baseTemplate] = PACKAGE_TYPES[baseTemplate]
+    }
+  })
+  
+  return availablePackages
 }
 
 // Tier information for UI display
