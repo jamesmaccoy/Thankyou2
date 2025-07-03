@@ -5,10 +5,12 @@ import { User } from '@/payload-types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Settings, User as UserIcon, Crown, Calendar, FileText, CreditCard } from 'lucide-react'
+import { Settings, User as UserIcon, Crown, Calendar, FileText, CreditCard, LogOut } from 'lucide-react'
 import { RoleUpgrade } from '@/components/RoleUpgrade'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useCustomerCenter } from '@/components/CustomerCenter'
+import { useUserContext } from '@/context/UserContext'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 interface AccountClientProps {
@@ -18,6 +20,8 @@ interface AccountClientProps {
 export default function AccountClient({ user }: AccountClientProps) {
   const { isSubscribed, isLoading } = useSubscription()
   const { CustomerCenterComponent, presentCustomerCenter } = useCustomerCenter()
+  const { handleAuthChange } = useUserContext()
+  const router = useRouter()
 
   if (!user) {
     return (
@@ -34,6 +38,29 @@ export default function AccountClient({ user }: AccountClientProps) {
   const isGuest = userRoles.includes('guest')
   const isHost = userRoles.includes('host')
   const isAdmin = userRoles.includes('admin')
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/users/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      
+      if (response.ok) {
+        // Update user context to reflect logout
+        handleAuthChange()
+        // Redirect to home page
+        router.push('/')
+      } else {
+        console.error('Logout failed')
+      }
+    } catch (error) {
+      console.error('Error during logout:', error)
+    }
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -228,6 +255,21 @@ export default function AccountClient({ user }: AccountClientProps) {
               </Button>
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      {/* Logout Section */}
+      <div className="mt-8 pt-6 border-t border-gray-200">
+        <div className="flex justify-center">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </div>
 
