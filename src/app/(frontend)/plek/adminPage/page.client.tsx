@@ -10,13 +10,14 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Loader2, Plus, Edit, Trash2, Eye, Calendar, BarChart3, Settings, Upload, X, Package, DollarSign, ExternalLink, Code, Copy, ChevronDown, Check, MoreVertical, Users } from "lucide-react"
+import { Loader2, Plus, Edit, Trash2, Eye, Calendar, BarChart3, Settings, Upload, X, Package, DollarSign, ExternalLink, Code, Copy, ChevronDown, Check, MoreVertical, Users, Star, Shield, Zap, Crown, Heart, Target, Award, Sparkles, Rocket, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import Image from 'next/image'
@@ -220,16 +221,7 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
     }
   }, [])
 
-  // Form states
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingPost, setEditingPost] = useState<Post | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [deletingPost, setDeletingPost] = useState<Post | null>(null)
-  const [isViewerDialogOpen, setIsViewerDialogOpen] = useState(false)
-  const [copiedScript, setCopiedScript] = useState<string | null>(null)
-  
-  // Form data with debounced updates - initialize after createPackageFromTemplate is defined
+  // Form state
   const [formData, setFormData] = useState<PostFormData>(() => ({
     title: '',
     content: '',
@@ -243,6 +235,18 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
       image: ''
     }
   }))
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
+  const [packageMode, setPackageMode] = useState<'preview' | 'edit'>('preview')
+
+  // Form states
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingPost, setEditingPost] = useState<Post | null>(null)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [deletingPost, setDeletingPost] = useState<Post | null>(null)
+  const [isViewerDialogOpen, setIsViewerDialogOpen] = useState(false)
+  const [copiedScript, setCopiedScript] = useState<string | null>(null)
 
   // Image upload
   const [uploadedImages, setUploadedImages] = useState<UploadedFile[]>([])
@@ -1780,11 +1784,22 @@ function PostForm({
   isAdmin?: boolean
   userEntitlements?: string[]
 }) {
+  // Package mode state for combobox
+  const [packageMode, setPackageMode] = useState<'preview' | 'edit'>('preview')
+  // Preview sub-mode state for combobox (within Preview mode)
+  const [previewMode, setPreviewMode] = useState<'mapping' | 'templates'>('mapping')
+  
+  // Helper function to remove package by RevenueCat ID
+  const removePackageByRevenueCatId = (revenueCatId: string) => {
+    const newPackageTypes = formData.packageTypes.filter(pkg => pkg.revenueCatId !== revenueCatId)
+    updateFormData({ packageTypes: newPackageTypes })
+  }
+
   return (
     <Tabs defaultValue="details" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="details">Plek Details</TabsTrigger>
-        <TabsTrigger value="packages">Package Types</TabsTrigger>
+        <TabsTrigger value="packages">Package Setup</TabsTrigger>
       </TabsList>
       
       <TabsContent value="details" className="space-y-6 mt-6">
@@ -2026,7 +2041,7 @@ function PostForm({
           </div>
         </div>
 
-        {/* Advanced Settings Section */}
+        {/* Advanced Settings Section - Moved back here as collapsible */}
         <div className="space-y-4 mt-8">
           <Popover>
             <PopoverTrigger asChild>
@@ -2130,108 +2145,522 @@ function PostForm({
       </TabsContent>
 
       <TabsContent value="packages" className="space-y-6 mt-6">
-        {/* Package Mapping Visualization */}
-        <PackageMappingVisualization userEntitlements={userEntitlements} />
-        
-        <div className="space-y-4">
+        {/* Unified Package Dashboard */}
+        <div className="space-y-6">
+          {/* Package Dashboard Header */}
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">Package Types</h3>
-            <Button type="button" onClick={onAddPackageType} variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-1" />
-              Add Package
-            </Button>
-          </div>
-          
-          {/* Package Template Quick Add */}
-          <div className="p-4 border rounded-lg bg-muted/50">
-            <p className="text-sm font-medium mb-2">Quick Add Templates:</p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(PACKAGE_TYPES || {}).map(([key, template]) => {
-                const PackageIcon = getPackageIconComponent(key)
-                return (
-                  <Button
-                    key={key}
-                    type="button"
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => onAddPackageTemplate(key)}
-                    className="gap-1"
-                  >
-                    <PackageIcon className="h-3 w-3" />
-                    {template.name}
-                  </Button>
-                )
-              })}
+            <div>
+              <h2 className="text-2xl font-bold">Package Dashboard</h2>
+              <p className="text-muted-foreground">Manage your add-ons and package configuration</p>
             </div>
           </div>
 
-          {formData.packageTypes.map((pkg, idx) => (
-            <Card key={idx} className="p-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Package {idx + 1}</Label>
-                  <Button 
-                    type="button" 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={() => onRemovePackageType(idx)} 
-                    disabled={formData.packageTypes.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+          {/* Package Dashboard Stats */}
+          <Card className="p-4">
+            <CardHeader className="p-0 mb-4">
+              <CardTitle className="text-base">Package Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {formData.packageTypes.length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Total Add-ons</div>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Input
-                    placeholder="Package name"
-                    value={pkg.name}
-                    onChange={(e) => onPackageChange(idx, 'name', e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <Input
-                        placeholder={`Price (leave empty to use base rate: ${formData.baseRate || 'not set'})`}
-                        type="number"
-                        min={0}
-                        value={pkg.price}
-                        onChange={(e) => onPackageChange(idx, 'price', e.target.value === '' ? '' : Number(e.target.value))}
-                        title="Leave empty to automatically use the post's base rate, or enter a custom price for this package"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {pkg.price === '' ? 
-                          `Will use base rate (${formData.baseRate || 'set base rate first'})` : 
-                          'Using custom price'
-                        }
-                      </p>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {formData.packageTypes.filter(pkg => pkg.price === 0).length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Free Add-ons</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {formData.packageTypes.filter(pkg => pkg.price !== 0 && pkg.price !== '').length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Paid Add-ons</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-amber-600">
+                    {formData.packageTypes.filter(pkg => pkg.revenueCatId).length}
+                  </div>
+                  <div className="text-sm text-muted-foreground">With RevenueCat</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Toggle Group for Preview/Edit Modes */}
+          <div className="flex flex-col space-y-4">
+            {/* Preview Mode (Quick Templates) */}
+            <div className={cn("space-y-4", packageMode !== 'preview' && "hidden")}>
+              {/* Preview sub-mode Combobox centered */}
+              <div className="flex items-center justify-center mb-6">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-[250px] justify-between"
+                    >
+                      {previewMode === 'mapping' ? (
+                        <>
+                          <Package className="mr-2 h-4 w-4" />
+                          Package Mapping for Your Tier
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Preview Add-on Templates
+                        </>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[250px] p-0">
+                    <Command>
+                      <CommandList>
+                        <CommandEmpty>No options found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="mapping"
+                            onSelect={() => {
+                              setPreviewMode('mapping')
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                previewMode === 'mapping' ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <Package className="mr-2 h-4 w-4" />
+                            Package Mapping for Your Tier
+                          </CommandItem>
+                          <CommandItem
+                            value="templates"
+                            onSelect={() => {
+                              setPreviewMode('templates')
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                previewMode === 'templates' ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            Preview Add-on Templates
+                          </CommandItem>
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Preview Add-on Options header with Preview/Edit mode selector */}
+           
+
+              {/* Package Mapping Section */}
+              <div className={cn("space-y-4", previewMode !== 'mapping' && "hidden")}>
+                <PackageMappingVisualization userEntitlements={userEntitlements} />
+              </div>
+
+              {/* Templates Section */}
+              <div className={cn("space-y-4", previewMode !== 'templates' && "hidden")}>  
+                {/* Move header and combobox here */}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-semibold">Preview Add-on Options</h3>
+                    <p className="text-muted-foreground">
+                      View your tier mappings or browse available add-on templates.
+                    </p>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-[200px] justify-between"
+                      >
+                        {packageMode === 'preview' ? (
+                          <>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Preview Add-ons
+                          </>
+                        ) : (
+                          <>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Add-ons
+                          </>
+                        )}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0">
+                      <Command>
+                        <CommandList>
+                          <CommandEmpty>No options found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="preview"
+                              onSelect={() => {
+                                setPackageMode('preview')
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  packageMode === 'preview' ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <Eye className="mr-2 h-4 w-4" />
+                              Preview Add-ons
+                            </CommandItem>
+                            <CommandItem
+                              value="edit"
+                              onSelect={() => {
+                                setPackageMode('edit')
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  packageMode === 'edit' ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Add-ons
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
+                  {Object.entries(PACKAGE_TYPES || {}).map(([key, template]) => {
+                    const PackageIcon = getPackageIconComponent(key)
+                    const isAdded = formData.packageTypes.some(pkg => pkg.revenueCatId === key)
+                    
+                    return (
+                      <Card key={key} className={cn(
+                        "p-4 cursor-pointer transition-all hover:shadow-md",
+                        isAdded ? "bg-green-50 border-green-200" : "hover:bg-muted/50"
+                      )}>
+                        <CardHeader className="p-0 mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-primary/10">
+                              <PackageIcon className="h-6 w-6 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <CardTitle className="text-lg">{template.name}</CardTitle>
+                              <p className="text-sm text-muted-foreground">
+                                {template.description.slice(0, 50)}...
+                              </p>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <div className="space-y-2 mb-4">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Multiplier:</span>
+                              <span className="font-medium">{template.multiplier}x</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Features:</span>
+                              <span className="font-medium">{template.features.length} included</span>
+                            </div>
+                          </div>
+                          
+                          <Button
+                            type="button"
+                            variant={isAdded ? "destructive" : "default"}
+                            size="sm"
+                            onClick={() => {
+                              if (isAdded) {
+                                // Unselect - remove the package
+                                removePackageByRevenueCatId(key)
+                                toast.success(`Removed ${template.name} add-on`)
+                              } else {
+                                // Select - add the package
+                                onAddPackageTemplate(key)
+                              }
+                            }}
+                            className="w-full"
+                          >
+                            {isAdded ? (
+                              <>
+                                <X className="h-4 w-4 mr-2" />
+                                Remove
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Template
+                              </>
+                            )}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+
+                {formData.packageTypes.length > 0 && (
+                  <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package className="h-5 w-5 text-blue-600" />
+                      <h4 className="font-medium text-blue-900">
+                        {formData.packageTypes.length} Add-on{formData.packageTypes.length > 1 ? 's' : ''} Added
+                      </h4>
                     </div>
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Multiplier"
-                        type="number"
-                        min={0}
-                        step={0.1}
-                        value={pkg.multiplier}
-                        onChange={(e) => onPackageChange(idx, 'multiplier', Number(e.target.value))}
-                        title="Price multiplier applied to the base/custom price"
-                      />
+                    <p className="text-sm text-blue-700 mb-3">
+                      Your add-ons have been added with a price of 0 (free). Switch to "Edit Add-ons" to configure pricing and details.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.packageTypes.map((pkg, idx) => (
+                        <Badge key={idx} variant="outline" className="bg-white">
+                          {pkg.name}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
-                  <Input
-                    placeholder="RevenueCat ID"
-                    value={pkg.revenueCatId}
-                    onChange={(e) => onPackageChange(idx, 'revenueCatId', e.target.value)}
-                  />
-                </div>
-                
-                <Textarea
-                  placeholder="Enter features (one per line)"
-                  value={pkg.features.join('\n')}
-                  onChange={(e) => onPackageChange(idx, 'features', e.target.value.split('\n').filter(f => f.trim()))}
-                  rows={3}
-                />
+                )}
               </div>
-            </Card>
-          ))}
+            </div>
+
+            {/* Edit Add-ons Mode (Configure Packages) */}
+            <div className={cn("space-y-4", packageMode !== 'edit' && "hidden")}>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium">Configure Your Add-ons</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Set pricing, features, and details for your add-on types. Drag to reorder.
+                    </p>
+                  </div>
+                  <Button type="button" onClick={onAddPackageType} variant="outline" size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Custom Add-on
+                  </Button>
+                </div>
+
+                {formData.packageTypes.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h4 className="text-lg font-medium mb-2">No Add-ons Yet</h4>
+                    <p className="text-muted-foreground mb-4">
+                      Start by adding some quick templates or create a custom add-on.
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                      <Button variant="outline" onClick={() => {
+                        // Switch to preview mode
+                        setPackageMode('preview')
+                      }}>
+                        Browse Templates
+                      </Button>
+                      <Button onClick={onAddPackageType}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Create Custom
+                      </Button>
+                    </div>
+                  </Card>
+                ) : (
+                  <div className="space-y-4">
+                    {formData.packageTypes.map((pkg, idx) => (
+                      <Card key={idx} className="p-4 group hover:shadow-md transition-shadow">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {/* Drag handle */}
+                              <div className="flex flex-col gap-1 cursor-move opacity-30 group-hover:opacity-60 transition-opacity">
+                                <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+                                <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+                                <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+                              </div>
+                              <Label className="text-base font-medium">Add-on {idx + 1}</Label>
+                              {pkg.price === 0 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Free Add-on
+                                </Badge>
+                              )}
+                            </div>
+                            {/* Remove button (smaller, less prominent) */}
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => onRemovePackageType(idx)} 
+                              disabled={formData.packageTypes.length === 1}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-sm font-medium">Add-on Name</Label>
+                                <Input
+                                  placeholder="Add-on name"
+                                  value={pkg.name}
+                                  onChange={(e) => onPackageChange(idx, 'name', e.target.value)}
+                                />
+                              </div>
+                              
+                              <div>
+                                <Label className="text-sm font-medium">Description</Label>
+                                <Input
+                                  placeholder="Add-on description"
+                                  value={pkg.description}
+                                  onChange={(e) => onPackageChange(idx, 'description', e.target.value)}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-sm font-medium">Price</Label>
+                                  <Input
+                                    placeholder={`Base rate: ${formData.baseRate || 'not set'}`}
+                                    type="number"
+                                    min={0}
+                                    value={pkg.price}
+                                    onChange={(e) => onPackageChange(idx, 'price', e.target.value === '' ? '' : Number(e.target.value))}
+                                  />
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {pkg.price === 0 ? 'Free add-on' : 
+                                     pkg.price === '' ? `Will use base rate` : 
+                                     'Custom price set'}
+                                  </p>
+                                </div>
+                                
+                                <div>
+                                  <Label className="text-sm font-medium">Multiplier</Label>
+                                  <Input
+                                    placeholder="1.0"
+                                    type="number"
+                                    min={0}
+                                    step={0.1}
+                                    value={pkg.multiplier}
+                                    onChange={(e) => onPackageChange(idx, 'multiplier', Number(e.target.value))}
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <Label className="text-sm font-medium">RevenueCat ID</Label>
+                                <Input
+                                  placeholder="RevenueCat product identifier"
+                                  value={pkg.revenueCatId}
+                                  onChange={(e) => onPackageChange(idx, 'revenueCatId', e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <Label className="text-sm font-medium">Features</Label>
+                            <Textarea
+                              placeholder="Enter features (one per line)"
+                              value={pkg.features.join('\n')}
+                              onChange={(e) => onPackageChange(idx, 'features', e.target.value.split('\n').filter(f => f.trim()))}
+                              rows={3}
+                              className="mt-1"
+                            />
+                          </div>
+
+                          {pkg.price === 0 && (
+                            <Alert className="border-amber-200 bg-amber-50">
+                              <AlertDescription className="text-sm text-amber-800">
+                                💡 This is a free add-on. Set a price above 0 to enable paid bookings, or keep it free for promotional offers.
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                    
+                    {formData.packageTypes.length > 1 && (
+                      <div className="text-center p-4 text-sm text-muted-foreground">
+                        💡 Tip: Hover over add-ons to see drag handles and remove options
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Bulk Operations */}
+                <Card className="p-4 mt-6">
+                  <CardHeader className="p-0 mb-4">
+                    <CardTitle className="text-base">Bulk Operations</CardTitle>
+                    <CardDescription>
+                      Apply changes to multiple add-ons at once.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          // Set all packages to use base rate
+                          formData.packageTypes.forEach((_, idx) => {
+                            onPackageChange(idx, 'price', '')
+                          })
+                        }}
+                        disabled={formData.packageTypes.length === 0}
+                      >
+                        <DollarSign className="h-4 w-4 mr-2" />
+                        Use Base Rate for All
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          // Set all packages to free
+                          formData.packageTypes.forEach((_, idx) => {
+                            onPackageChange(idx, 'price', 0)
+                          })
+                        }}
+                        disabled={formData.packageTypes.length === 0}
+                      >
+                        <Package className="h-4 w-4 mr-2" />
+                        Make All Free
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const config = JSON.stringify(formData.packageTypes, null, 2)
+                          navigator.clipboard.writeText(config)
+                          toast.success('Add-on configuration copied to clipboard')
+                        }}
+                        disabled={formData.packageTypes.length === 0}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Export Config
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Warning for Free Packages */}
+                {formData.packageTypes.some(pkg => pkg.price === 0) && (
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertDescription className="text-amber-800">
+                      ⚠️ You have {formData.packageTypes.filter(pkg => pkg.price === 0).length} free add-on(s). 
+                      Free add-ons act as promotional offers and won't generate revenue. 
+                      Consider setting prices for add-ons you want to monetize.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </TabsContent>
     </Tabs>
