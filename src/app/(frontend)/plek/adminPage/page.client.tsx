@@ -79,7 +79,7 @@ interface PackageFormProps {
 function PackageMappingVisualization({ userEntitlements, packageTypes = [] }: { userEntitlements: string[]; packageTypes?: PackageType[] }) {
   const userTier = getUserTierFromEntitlements(userEntitlements)
   const availablePackages = getAvailablePackagesForUser(userEntitlements)
-  const baseTemplates: BaseTemplate[] = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package']
+  const baseTemplates: BaseTemplate[] = ['per_night', 'per_hour', 'three_nights', 'weekly', 'monthly', 'wine_package']
 
   // Stats based on current packageTypes
   const totalAddons = packageTypes.length
@@ -1824,6 +1824,12 @@ function PostForm({
   // Preview sub-mode state for combobox (within Preview mode)
   const [previewMode, setPreviewMode] = useState<'mapping' | 'templates'>('mapping')
   
+  // Only show the templates that the current user can actually add, based on their entitlements
+  const availablePackageTemplates = useMemo(
+    () => getAvailablePackagesForUser(userEntitlements || []),
+    [userEntitlements]
+  )
+
   // Helper function to remove package by RevenueCat ID
   const removePackageByRevenueCatId = (revenueCatId: string) => {
     const newPackageTypes = formData.packageTypes.filter(pkg => pkg.revenueCatId !== revenueCatId)
@@ -2289,7 +2295,7 @@ function PostForm({
               {/* Templates Section */}
               <div className={cn("space-y-4", previewMode !== 'templates' && "hidden")}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
-                  {Object.entries(PACKAGE_TYPES || {}).map(([key, template]) => {
+                  {Object.entries(availablePackageTemplates).map(([key, template]) => {
                     const PackageIcon = getPackageIconComponent(key)
                     const isAdded = formData.packageTypes.some(pkg => pkg.revenueCatId === key)
                     

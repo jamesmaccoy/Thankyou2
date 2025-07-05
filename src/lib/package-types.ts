@@ -10,7 +10,8 @@ import {
   Package as PackageIcon,
   LucideIcon,
   Star,
-  Briefcase
+  Briefcase,
+  Clock
 } from 'lucide-react'
 
 // Icon mapping for package types
@@ -24,7 +25,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   wine: Wine,
   package: PackageIcon,
   star: Star,
-  briefcase: Briefcase
+  briefcase: Briefcase,
+  clock: Clock
 }
 
 // Get icon component for a package type
@@ -52,14 +54,14 @@ export interface PackageType {
   category: 'standard' | 'luxury' | 'hosted' | 'specialty'
   icon: string
   tier: 'standard' | 'pro' | 'luxury'
-  baseTemplate: 'per_night' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
+  baseTemplate: 'per_night' | 'per_hour' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
   durationVariant?: string
 }
 
 export interface PackageTypeTemplate extends PackageType {}
 
 // Base templates for organizing packages
-export type BaseTemplate = 'per_night' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
+export type BaseTemplate = 'per_night' | 'per_hour' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
 
 // User tiers for package access
 export type UserTier = 'guest' | 'standard' | 'pro' | 'luxury'
@@ -232,7 +234,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
 
   // Customer (Paid) Packages - Enhanced versions with premium features
   per_night_customer: {
-    name: "Per Night Pro",
+    name: "Per Night / 24 hours",
     description: "Enhanced nightly experience with priority support and premium amenities",
     multiplier: 1.0,
     features: [
@@ -255,7 +257,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
   },
 
   three_nights_customer: {
-    name: "3 Nights Pro Package",
+    name: "3 Nights Package for Customer",
     description: "Enhanced three-night experience with premium support and exclusive perks",
     multiplier: 0.95,
     features: [
@@ -280,7 +282,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
   },
 
   weekly_customer: {
-    name: "Weekly Pro Package",
+    name: "Weekly Package for customer",
     description: "Premium week-long experience with dedicated support and enhanced amenities",
     multiplier: 0.85,
     features: [
@@ -327,6 +329,45 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     icon: 'calendar',
     tier: 'standard',
     baseTemplate: 'monthly'
+  },
+
+  // Standard Packages
+  per_hour_guest: {
+    name: "Per Hour (Guest)",
+    description: "Hourly access for guests / standard tier",
+    multiplier: 0.15,
+    features: [
+      "Photo studio access (per hour)",
+      "Basic lighting equipment",
+      "Self-service setup"
+    ],
+    revenueCatId: "per_hour_guest",
+    minNights: 0,
+    maxNights: 0,
+    category: 'standard',
+    icon: 'clock',
+    tier: 'standard',
+    baseTemplate: 'per_hour'
+  },
+
+  // Pro-tier Hourly Package
+  per_hour: {
+    name: "Per Hour (customer)",
+    description: "Hourly access with priority support (pro tier)",
+    multiplier: 0.12,
+    features: [
+      "Photo studio access (per hour)",
+      "Premium lighting equipment",
+      "Priority booking support",
+      "Enhanced cleaning service"
+    ],
+    revenueCatId: "per_hour",
+    minNights: 0,
+    maxNights: 0,
+    category: 'standard',
+    icon: 'clock',
+    tier: 'pro',
+    baseTemplate: 'per_hour'
   }
 } as const
 
@@ -384,6 +425,16 @@ export const PACKAGE_MAPPINGS: PackageMapping = {
     standard: {
       packageId: 'wine_package',
       revenueCatId: 'Bottle_wine'
+    }
+  },
+  per_hour: {
+    standard: {
+      packageId: 'per_hour_guest',
+      revenueCatId: 'per_hour_guest'
+    },
+    pro: {
+      packageId: 'per_hour',
+      revenueCatId: 'per_hour'
     }
   }
 }
@@ -490,7 +541,7 @@ export function getAvailablePackagesForUser(userEntitlements: string[]): Record<
   const availablePackages: Record<string, PackageTypeTemplate> = {}
   
   // Get all base templates
-  const baseTemplates: BaseTemplate[] = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package']
+  const baseTemplates: BaseTemplate[] = ['per_night', 'per_hour', 'three_nights', 'weekly', 'monthly', 'wine_package']
   
   baseTemplates.forEach(baseTemplate => {
     const packageId = getPackageForUserTier(baseTemplate, userTier)

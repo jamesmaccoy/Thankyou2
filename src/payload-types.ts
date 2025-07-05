@@ -315,6 +315,8 @@ export interface Post {
               | 'three_nights_customer'
               | 'weekly_customer'
               | 'monthly'
+              | 'per_hour_guest'
+              | 'per_hour'
             )
           | null;
         /**
