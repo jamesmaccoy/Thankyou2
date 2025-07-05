@@ -245,7 +245,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
       "Free cancellation up to 24h",
       "Equipment setup assistance"
     ],
-    revenueCatId: "per_night_pro",
+    revenueCatId: "per_night",
     minNights: 1,
     maxNights: 1,
     category: 'standard',
@@ -270,7 +270,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
       "Free equipment tutorials",
       "Flexible check-in/out times"
     ],
-    revenueCatId: "3nights_pro",
+    revenueCatId: "3nights_customer",
     minNights: 3,
     maxNights: 3,
     category: 'standard',
@@ -296,7 +296,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
       "Enhanced workspace setup",
       "Complimentary local experiences"
     ],
-    revenueCatId: "weekly_pro",
+    revenueCatId: "weekly_customer",
     minNights: 7,
     maxNights: 7,
     category: 'standard',
@@ -339,7 +339,7 @@ export const PACKAGE_MAPPINGS: PackageMapping = {
     },
     pro: {
       packageId: 'per_night_customer',
-      revenueCatId: 'per_night_pro'
+      revenueCatId: 'per_night_customer'
     },
     luxury: {
       packageId: 'luxury_night',
@@ -353,7 +353,7 @@ export const PACKAGE_MAPPINGS: PackageMapping = {
     },
     pro: {
       packageId: 'three_nights_customer',
-      revenueCatId: '3nights_pro'
+      revenueCatId: '3nights_customer'
     },
     luxury: {
       packageId: 'hosted_3nights',
@@ -367,7 +367,7 @@ export const PACKAGE_MAPPINGS: PackageMapping = {
     },
     pro: {
       packageId: 'weekly_customer',
-      revenueCatId: 'weekly_pro'
+      revenueCatId: 'weekly_customer'
     },
     luxury: {
       packageId: 'hosted_weekly',
