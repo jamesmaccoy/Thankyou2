@@ -348,7 +348,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             <div className="block md:hidden mt-3 pt-3 border-t border-border/50">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
                 <span>{currentTier.title}</span>
-                <span>{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
+                <span>{selectedDuration} ∞{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
             </div>
           )}

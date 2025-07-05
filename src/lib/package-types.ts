@@ -79,7 +79,7 @@ export interface PackageMapping {
 export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
   // Standard Packages
   per_night: {
-    name: "Per Night",
+    name: "24 hours",
     description: "Standard nightly rate for photo studio rental",
     multiplier: 1.0,
     features: [
