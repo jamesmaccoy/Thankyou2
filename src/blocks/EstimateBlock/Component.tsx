@@ -27,7 +27,7 @@ export type EstimateBlockProps = EstimateBlockType & {
 const packageTiers = [
   {
     id: "per_night",
-    title: "Per Night",
+    title: "24 hours",
     minNights: 1,
     maxNights: 1,
     multiplier: 1.0,
@@ -191,7 +191,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         data-stay-duration 
         className={cn('flex flex-col space-y-6 p-6 bg-card rounded-lg border border-border mb-24 md:mb-8', className)}
       >
-        <h3 className="text-xl font-semibold">Book your stay</h3>
+        <h3 className="text-xl font-semibold">Estimate</h3>
         
         {/* Date Selection */}
         <div className="flex flex-col space-y-3">
@@ -208,7 +208,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                 >
                   <CalendarIcon className="mr-3 h-5 w-5" />
                   <div className="flex flex-col items-start">
-                    <span className="text-xs text-muted-foreground">CHECK-IN</span>
+                    <span className="text-xs text-muted-foreground">Start</span>
                     <span className="text-sm">{startDate ? format(startDate, "MMM d, yyyy") : "Add date"}</span>
                   </div>
                 </Button>
@@ -236,7 +236,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                 >
                   <CalendarIcon className="mr-3 h-5 w-5" />
                   <div className="flex flex-col items-start">
-                    <span className="text-xs text-muted-foreground">CHECK-OUT</span>
+                    <span className="text-xs text-muted-foreground">Finish</span>
                     <span className="text-sm">{endDate ? format(endDate, "MMM d, yyyy") : "Add date"}</span>
                   </div>
                 </Button>
@@ -269,11 +269,11 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Base Rate:</span>
-                <span className="font-medium">R{effectiveBaseRate}/night</span>
+                <span className="font-medium">R{effectiveBaseRate}/package</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Duration:</span>
-                <span className="font-medium">{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-muted-foreground">Duration/Reoccur</span>
+                <span className="font-medium">{selectedDuration}∞ 24h{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
               {/* Discount preview for non-subscribers */}
               {currentTier?.multiplier !== 1 && (
