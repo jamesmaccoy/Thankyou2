@@ -333,7 +333,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
 
   // Standard Packages
   per_hour_guest: {
-    name: "Per Hour (Guest)",
+    name: "Per Hour (Standard)",
     description: "Hourly access for guests / standard tier",
     multiplier: 0.15,
     features: [
@@ -352,7 +352,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
 
   // Pro-tier Hourly Package
   per_hour: {
-    name: "Per Hour (customer)",
+    name: "Per Hour (Pro)",
     description: "Hourly access with priority support (pro tier)",
     multiplier: 0.12,
     features: [

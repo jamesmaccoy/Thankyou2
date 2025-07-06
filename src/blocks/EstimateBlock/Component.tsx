@@ -27,10 +27,17 @@ export type EstimateBlockProps = EstimateBlockType & {
 const packageTiers = [
   {
     id: "per_night",
-    title: "24 hours",
+    title: "Per Night",
     minNights: 1,
     maxNights: 1,
     multiplier: 1.0,
+  },
+  {
+    id: "per_hour",
+    title: "Per Hour",
+    minNights: 1,
+    maxNights: 1,
+    multiplier: 0.1, // 10% discount
   },
   {
     id: "three_nights",
@@ -269,11 +276,11 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Base Rate:</span>
-                <span className="font-medium">R{effectiveBaseRate}/package</span>
+                <span className="font-medium">R{effectiveBaseRate}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Duration/Reoccur</span>
-                <span className="font-medium">{selectedDuration}∞ 24h{selectedDuration !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-muted-foreground">Duration</span>
+                <span className="font-medium">{selectedDuration}night{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
               {/* Discount preview for non-subscribers */}
               {currentTier?.multiplier !== 1 && (
@@ -348,7 +355,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             <div className="block md:hidden mt-3 pt-3 border-t border-border/50">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
                 <span>{currentTier.title}</span>
-                <span>{selectedDuration} ∞{selectedDuration !== 1 ? 's' : ''}</span>
+                <span>{selectedDuration}night{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
             </div>
           )}
