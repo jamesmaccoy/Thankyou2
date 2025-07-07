@@ -6,6 +6,40 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
+const jsonHeaders = { 'Content-Type': 'application/json' };
+
+export const api = {
+  // PATCH that auto-stringifies plain objects
+  patch(url: string, data?: any, init: RequestInit = {}) {
+    let body;
+    let headers = init.headers || {};
+
+    if (data !== undefined) {
+      // If caller handed us a plain object, stringify it.
+      // If they already gave a string / FormData / Blob, keep it as is.
+      body =
+        typeof data === 'object' && !(data instanceof Blob) && !(data instanceof FormData)
+          ? JSON.stringify(data)
+          : data;
+
+      // Only set the JSON header when we really sent JSON.
+      if (typeof body === 'string') {
+        headers = { ...headers, ...jsonHeaders };
+      }
+    }
+
+    return fetch(url, {
+      ...init,
+      method: 'PATCH',
+      credentials: 'include',
+      headers,
+      body
+    });
+  },
+
+  // POST etc…
+};
+
 export default function AddPlekForm({ onSuccess }: { onSuccess?: () => void }) {
   const router = useRouter()
   const [title, setTitle] = useState('')
@@ -47,6 +81,11 @@ export default function AddPlekForm({ onSuccess }: { onSuccess?: () => void }) {
           description: pkg.description,
           price: pkg.price === '' ? undefined : Number(pkg.price)
         }))
+    }
+
+    for (const [k, v] of Object.entries(data)) {
+      if (typeof v === 'object' && v instanceof File)
+        throw new Error(`Field ${k} still contains a File object`)
     }
 
     try {

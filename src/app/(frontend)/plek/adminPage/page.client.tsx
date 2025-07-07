@@ -925,6 +925,14 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
 
       const result = await response.json()
       
+      // Payload 3.39 returns the updated doc directly; older versions wrap it in { doc }
+      const updatedDoc = result?.doc || result
+
+      if (!updatedDoc || typeof updatedDoc !== 'object') {
+        console.error('Invalid API response structure:', result)
+        throw new Error('Invalid server response - missing or malformed post data')
+      }
+      
       // Enhanced debugging for API response
       console.log('Full API response:', result)
       console.log('Result.doc exists:', !!result.doc)
@@ -939,65 +947,65 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
       }
       
       // Ensure heroImage field is properly structured
-      if (result.doc.heroImage && typeof result.doc.heroImage === 'object') {
-        console.log('Hero image object detected:', result.doc.heroImage)
+      if (updatedDoc.heroImage && typeof updatedDoc.heroImage === 'object') {
+        console.log('Hero image object detected:', updatedDoc.heroImage)
         // Make sure it has proper image structure
-        if (!result.doc.heroImage.id || !result.doc.heroImage.url) {
-          console.warn('Hero image object missing required fields:', result.doc.heroImage)
+        if (!updatedDoc.heroImage.id || !updatedDoc.heroImage.url) {
+          console.warn('Hero image object missing required fields:', updatedDoc.heroImage)
           // Try to use the ID we sent if the response is corrupted
           if (heroImageId) {
-            result.doc.heroImage = heroImageId
+            updatedDoc.heroImage = heroImageId
             console.log('Fallback: Using sent hero image ID:', heroImageId)
           }
         }
-      } else if (result.doc.heroImage && typeof result.doc.heroImage === 'string') {
-        console.log('Hero image string detected:', result.doc.heroImage)
+      } else if (updatedDoc.heroImage && typeof updatedDoc.heroImage === 'string') {
+        console.log('Hero image string detected:', updatedDoc.heroImage)
         // Check if it's a weird webpack response
-        if (result.doc.heroImage.includes('webpack') || result.doc.heroImage.includes('"c":')) {
-          console.error('Webpack corruption detected in hero image field:', result.doc.heroImage)
+        if (updatedDoc.heroImage.includes('webpack') || updatedDoc.heroImage.includes('"c":')) {
+          console.error('Webpack corruption detected in hero image field:', updatedDoc.heroImage)
           // Use the fallback image ID we calculated
           if (heroImageId) {
-            result.doc.heroImage = heroImageId
+            updatedDoc.heroImage = heroImageId
             console.log('Fallback: Replacing corrupted hero image with:', heroImageId)
           } else {
-            result.doc.heroImage = null
+            updatedDoc.heroImage = null
             console.log('Fallback: Clearing corrupted hero image field')
           }
         }
       }
       
       // Ensure meta.image field is properly structured
-      if (result.doc.meta?.image && typeof result.doc.meta.image === 'object') {
-        console.log('Meta image object detected:', result.doc.meta.image)
-        if (!result.doc.meta.image.id || !result.doc.meta.image.url) {
-          console.warn('Meta image object missing required fields:', result.doc.meta.image)
+      if (updatedDoc.meta?.image && typeof updatedDoc.meta.image === 'object') {
+        console.log('Meta image object detected:', updatedDoc.meta.image)
+        if (!updatedDoc.meta.image.id || !updatedDoc.meta.image.url) {
+          console.warn('Meta image object missing required fields:', updatedDoc.meta.image)
           if (metaImageId) {
-            result.doc.meta.image = metaImageId
+            updatedDoc.meta.image = metaImageId
             console.log('Fallback: Using sent meta image ID:', metaImageId)
           }
         }
-      } else if (result.doc.meta?.image && typeof result.doc.meta.image === 'string') {
-        console.log('Meta image string detected:', result.doc.meta.image)
-        if (result.doc.meta.image.includes('webpack') || result.doc.meta.image.includes('"c":')) {
-          console.error('Webpack corruption detected in meta image field:', result.doc.meta.image)
+      } else if (updatedDoc.meta?.image && typeof updatedDoc.meta.image === 'string') {
+        console.log('Meta image string detected:', updatedDoc.meta.image)
+        if (updatedDoc.meta.image.includes('webpack') || updatedDoc.meta.image.includes('"c":')) {
+          console.error('Webpack corruption detected in meta image field:', updatedDoc.meta.image)
           if (metaImageId) {
-            result.doc.meta.image = metaImageId
+            updatedDoc.meta.image = metaImageId
             console.log('Fallback: Replacing corrupted meta image with:', metaImageId)
           } else {
-            result.doc.meta.image = null
+            updatedDoc.meta.image = null
             console.log('Fallback: Clearing corrupted meta image field')
           }
         }
       }
       
       console.log('Final cleaned post data:', {
-        id: result.doc.id,
-        title: result.doc.title,
-        heroImage: result.doc.heroImage,
-        meta: result.doc.meta
+        id: updatedDoc.id,
+        title: updatedDoc.title,
+        heroImage: updatedDoc.heroImage,
+        meta: updatedDoc.meta
       })
       
-      setPosts(prev => prev.map(post => post.id === editingPost.id ? result.doc : post))
+      setPosts(prev => prev.map(post => post.id === editingPost.id ? updatedDoc : post))
       setSuccess('Plek updated successfully!')
       setIsEditDialogOpen(false)
       setEditingPost(null)
