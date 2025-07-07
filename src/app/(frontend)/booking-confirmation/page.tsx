@@ -60,7 +60,7 @@ export default async function BookingConfirmationPage({
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold tracking-tighter mb-4">Booking Confirmed!</h1>
-          <p className="text-muted-foreground">Thank you for your booking. We're excited to host you!</p>
+          <p className="text-muted-foreground">Thank you for your booking. We&apos;re excited to host you!</p>
         </div>
         
         <div className="bg-muted p-6 rounded-lg border border-border mb-8">

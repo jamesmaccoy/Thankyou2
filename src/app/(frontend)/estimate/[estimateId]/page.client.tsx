@@ -1093,7 +1093,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                   No packages available for {selectedDuration} nights
                 </h3>
                 <p className="text-amber-700 text-sm mb-4">
-                  The selected stay duration doesn't match any available packages. Try adjusting your dates or contact us for custom arrangements.
+                  The selected stay duration doesn&apos;t match any available packages. Try adjusting your dates or contact us for custom arrangements.
                 </p>
                 <Button variant="outline" onClick={() => setSelectedDuration(1)}>
                   Reset to 1 night
@@ -1295,4 +1295,4 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
       </div>
     </div>
   )
-} 
+}

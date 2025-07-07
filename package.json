@@ -22,7 +22,7 @@
     "email:dev": "email dev --port 3001 --dir src/emails"
   },
   "dependencies": {
-    "@google/genai": "^1.0.1",
+    "@google/genai": "^1.8.0",
     "@google/generative-ai": "^0.24.1",
     "@payloadcms/db-mongodb": "3.39.1",
     "@payloadcms/db-postgres": "3.39.1",

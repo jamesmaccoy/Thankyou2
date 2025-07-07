@@ -1447,7 +1447,7 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
           <DialogHeader>
             <DialogTitle>Delete Post</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{deletingPost?.title}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{deletingPost?.title}&quot;? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1530,35 +1530,35 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
               <div className="relative">
                 <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
 {`{
-  "title": "Knysna Beach House",
-  "heroImage": "68551f42433af111fcd627fc",
-  "content": {
-    "root": {
-      "children": [
+  &quot;title&quot;: &quot;Knysna Beach House&quot;,
+  &quot;heroImage&quot;: &quot;68551f42433af111fcd627fc&quot;,
+  &quot;content&quot;: {
+    &quot;root&quot;: {
+      &quot;children&quot;: [
         {
-          "type": "paragraph",
-          "children": [
+          &quot;type&quot;: &quot;paragraph&quot;,
+          &quot;children&quot;: [
             {
-              "type": "text",
-              "text": "Beautiful beachfront property..."
+              &quot;type&quot;: &quot;text&quot;,
+              &quot;text&quot;: &quot;Beautiful beachfront property...&quot;
             }
           ]
         }
       ],
-      "format": "",
-      "type": "root",
-      "version": 1
+      &quot;format&quot;: &quot;&quot;,
+      &quot;type&quot;: &quot;root&quot;,
+      &quot;version&quot;: 1
     }
   },
-  "categories": ["684aca2d59ac17af425eb5f7"],
-  "meta": {},
-  "publishedAt": "2025-06-20T06:55:45.508Z",
-  "authors": ["684ac67759ac17af425eaf63"],
-  "baseRate": 8000,
-  "slug": "knysna-beach-house",
-  "slugLock": true,
-  "_status": "published",
-  "id": "6855052c80b3955db58780ec"
+  &quot;categories&quot;: [&quot;684aca2d59ac17af425eb5f7&quot;],
+  &quot;meta&quot;: {},
+  &quot;publishedAt&quot;: &quot;2025-06-20T06:55:45.508Z&quot;,
+  &quot;authors&quot;: [&quot;684ac67759ac17af425eaf63&quot;],
+  &quot;baseRate&quot;: 8000,
+  &quot;slug&quot;: &quot;knysna-beach-house&quot;,
+  &quot;slugLock&quot;: true,
+  &quot;_status&quot;: &quot;published&quot;,
+  &quot;id&quot;: &quot;6855052c80b3955db58780ec&quot;
 }`}
                 </pre>
                 <Button
@@ -1566,35 +1566,35 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
                   variant="outline"
                   className="absolute top-2 right-2"
                   onClick={() => copyToClipboard(`{
-  "title": "Knysna Beach House",
-  "heroImage": "68551f42433af111fcd627fc",
-  "content": {
-    "root": {
-      "children": [
+  &quot;title&quot;: &quot;Knysna Beach House&quot;,
+  &quot;heroImage&quot;: &quot;68551f42433af111fcd627fc&quot;,
+  &quot;content&quot;: {
+    &quot;root&quot;: {
+      &quot;children&quot;: [
         {
-          "type": "paragraph",
-          "children": [
+          &quot;type&quot;: &quot;paragraph&quot;,
+          &quot;children&quot;: [
             {
-              "type": "text",
-              "text": "Beautiful beachfront property..."
+              &quot;type&quot;: &quot;text&quot;,
+              &quot;text&quot;: &quot;Beautiful beachfront property...&quot;
             }
           ]
         }
       ],
-      "format": "",
-      "type": "root",
-      "version": 1
+      &quot;format&quot;: &quot;&quot;,
+      &quot;type&quot;: &quot;root&quot;,
+      &quot;version&quot;: 1
     }
   },
-  "categories": ["684aca2d59ac17af425eb5f7"],
-  "meta": {},
-  "publishedAt": "2025-06-20T06:55:45.508Z",
-  "authors": ["684ac67759ac17af425eaf63"],
-  "baseRate": 8000,
-  "slug": "knysna-beach-house",
-  "slugLock": true,
-  "_status": "published",
-  "id": "6855052c80b3955db58780ec"
+  &quot;categories&quot;: [&quot;684aca2d59ac17af425eb5f7&quot;],
+  &quot;meta&quot;: {},
+  &quot;publishedAt&quot;: &quot;2025-06-20T06:55:45.508Z&quot;,
+  &quot;authors&quot;: [&quot;684ac67759ac17af425eaf63&quot;],
+  &quot;baseRate&quot;: 8000,
+  &quot;slug&quot;: &quot;knysna-beach-house&quot;,
+  &quot;slugLock&quot;: true,
+  &quot;_status&quot;: &quot;published&quot;,
+  &quot;id&quot;: &quot;6855052c80b3955db58780ec&quot;
 }`, 'viewer-json')}
                 >
                   {copiedScript === 'viewer-json' ? 'Copied!' : <Copy className="h-4 w-4" />}
@@ -2118,7 +2118,7 @@ function PostForm({
                     />
                     {!formData.meta.title && formData.title && (
                       <p className="text-xs text-muted-foreground">
-                        Auto-generated: "{formData.title} | Stay at our self built plek"
+                        Auto-generated: &quot;{formData.title} | Stay at our self built plek&quot;
                       </p>
                     )}
                   </div>

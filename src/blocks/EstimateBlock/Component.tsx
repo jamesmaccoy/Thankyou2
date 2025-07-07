@@ -23,63 +23,6 @@ export type EstimateBlockProps = EstimateBlockType & {
   baseRateOverride?: number
 }
 
-// Define package tiers with their thresholds and multipliers
-const packageTiers = [
-  {
-    id: "per_night",
-    title: "Per Night",
-    minNights: 1,
-    maxNights: 1,
-    multiplier: 1.0,
-  },
-  {
-    id: "per_hour",
-    title: "Per Hour",
-    minNights: 1,
-    maxNights: 1,
-    multiplier: 0.1, // 10% discount
-  },
-  {
-    id: "three_nights",
-    title: "3 Night Package",
-    minNights: 2,
-    maxNights: 3,
-    multiplier: 0.9, // 10% discount
-  },
-  {
-    id: "Weekly",
-    title: "Weekly Package",
-    minNights: 4,
-    maxNights: 7,
-    multiplier: 0.8, // 20% discount
-  },
-  {
-    id: "2Xweekly",
-    title: "2X Weekly Package",
-    minNights: 8,
-    maxNights: 13,
-    multiplier: 0.7, // 30% discount
-  },
-  {
-    id: "weekX3",
-    title: "3 Week Package",
-    minNights: 14,
-    maxNights: 28,
-    multiplier: 0.5, // 50% discount
-  },
-  {
-    id: "monthly",
-    title: "Monthly Package",
-    minNights: 29,
-    maxNights: 365,
-    multiplier: 0.7, // 30% discount
-  }
-]
-
-if (packageTiers.length === 0) {
-  throw new Error('packageTiers array must not be empty');
-}
-
 // Define a type for a package tier
 type PackageTier = {
   id: string;
@@ -88,21 +31,6 @@ type PackageTier = {
   maxNights: number;
   multiplier: number;
 };
-
-// Helper to always get a valid tier
-function getValidTier(diffDays: number): PackageTier {
-  if (packageTiers.length === 0) {
-    // Fallback tier if none are defined
-    return {
-      id: 'default',
-      title: 'Default Package',
-      minNights: 1,
-      maxNights: 365,
-      multiplier: 1,
-    };
-  }
-  return packageTiers.find(tier => diffDays >= tier.minNights && diffDays <= tier.maxNights) || packageTiers[0]!;
-}
 
 // Helper to get a valid base rate
 function getValidBaseRate(baseRate: unknown, baseRateOverride: unknown): number {
@@ -125,12 +53,23 @@ function fetchUnavailableDates(postId: string): Promise<string[]> {
     .then((data) => data.unavailableDates || [])
 }
 
+async function fetchPost(postId: string) {
+  const res = await fetch(`/api/posts/${postId}`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch post data');
+  }
+  return res.json();
+}
+
+
 export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRate = 150, baseRateOverride, blockType, postId }) => {
   const effectiveBaseRate = getValidBaseRate(baseRate, baseRateOverride);
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [endDate, setEndDate] = useState<Date | null>(null)
   const [selectedDuration, setSelectedDuration] = useState(1)
-  const [currentTier, setCurrentTier] = useState<PackageTier>(getValidTier(1));
+  const [packageTiers, setPackageTiers] = useState<PackageTier[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [currentTier, setCurrentTier] = useState<PackageTier | undefined>(undefined);
   const [unavailableDates, setUnavailableDates] = useState<string[]>([])
   const { currentUser } = useUserContext()
   const { isSubscribed } = useSubscription()
@@ -140,21 +79,73 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   const baseTotal = calculateTotal(effectiveBaseRate, selectedDuration, 1)
 
   useEffect(() => {
-    if (startDate && endDate) {
-      const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      
-      // Always get a valid tier
-      const tier = getValidTier(diffDays)
+    async function loadPostData() {
+      try {
+        const post = await fetchPost(postId);
+        if (post && post.packageTypes) {
+          const generatedTiers = post.packageTypes.map((pkg: any) => ({
+            id: pkg.templateId || pkg.name.toLowerCase().replace(/ /g, '_'),
+            title: pkg.name,
+            minNights: pkg.minNights || 1,
+            maxNights: pkg.maxNights || 1,
+            multiplier: pkg.multiplier || 1.0,
+          }));
+          setPackageTiers(generatedTiers);
+          // Set initial selected package to the first one, or 'per_night' if available
+          const initialPackage = generatedTiers.find(tier => tier.id === 'per_night') || generatedTiers[0];
+          if (initialPackage) {
+            setSelectedPackageId(initialPackage.id);
+            setCurrentTier(initialPackage);
+          }
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
 
-      if (diffDays < 1 || startDate >= endDate) {
-        setEndDate(null)
+    loadPostData();
+  }, [postId]);
+
+  // Helper to get a valid tier by ID
+  function getValidTierById(packageId: string): PackageTier | undefined {
+    return packageTiers.find(tier => tier.id === packageId);
+  }
+
+  useEffect(() => {
+    if (selectedPackageId) {
+      const tier = getValidTierById(selectedPackageId);
+      setCurrentTier(tier);
+
+      // Reset dates and duration if package type changes significantly
+      if (tier?.id === 'per_hour') {
+        setEndDate(startDate); // Ensure endDate is same as startDate for hourly
+      } else if (startDate && endDate && tier && (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) < tier.minNights) {
+        // If current duration is less than new minNights, reset endDate
+        setEndDate(null);
+      }
+    }
+  }, [selectedPackageId, packageTiers, startDate, endDate]);
+
+  useEffect(() => {
+    if (startDate && currentTier) {
+      let duration = 1;
+
+      if (currentTier.id === 'per_hour') {
+        duration = selectedDuration; // Use the manually set hours
+        setEndDate(startDate); // For hourly, end date is same as start date
+      } else if (endDate) {
+        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+        duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (duration < 1 || startDate >= endDate) {
+          setEndDate(null);
+        }
+      } else { // If no endDate and not per_hour, default to 1 day
+        duration = 1;
       }
 
-      setSelectedDuration(diffDays)
-      setCurrentTier(tier)
+      setSelectedDuration(duration);
     }
-  }, [startDate, endDate])
+  }, [startDate, endDate, selectedDuration, currentTier]);
 
   useEffect(() => {
     fetchUnavailableDates(postId).then((dates) => setUnavailableDates(dates))
@@ -165,21 +156,23 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   }
 
   const handleBookingClick = async () => {
-    if (!startDate || !endDate) return;
-    if (!currentUser?.id) {
-      alert("You must be logged in to create an estimate.");
-      return;
-    }
+    if (!startDate || !currentUser?.id || !currentTier || (currentTier.id !== 'per_hour' && !endDate) || (currentTier.id === 'per_hour' && selectedDuration < 1)) return;
+
+    const fromDate = startDate.toISOString();
+    const toDate = currentTier.id === 'per_hour' ? startDate.toISOString() : (endDate?.toISOString() || fromDate);
+
     const res = await fetch('/api/estimates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         postId,
-        fromDate: startDate.toISOString(),
-        toDate: endDate.toISOString(),
+        fromDate,
+        toDate,
         guests: [], // or your guests data
         total: canSeeDiscount ? packageTotal : baseTotal,
         customer: currentUser.id,
+        packageType: currentTier.id,
+        duration: selectedDuration, // Send duration for hourly packages
       }),
     });
     if (res.ok) {
@@ -189,7 +182,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       const errorText = await res.text();
       alert('Failed to create estimate: ' + errorText);
     }
-  }
+  };
 
   return (
     <>
@@ -200,6 +193,22 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       >
         <h3 className="text-xl font-semibold">Estimate</h3>
         
+        {/* Package Selection */}
+        <div className="flex flex-col space-y-3">
+          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Package</label>
+          <select
+            value={selectedPackageId || ''}
+            onChange={(e) => setSelectedPackageId(e.target.value)}
+            className="w-full p-3 border border-border rounded-md bg-background text-foreground"
+          >
+            {packageTiers.map((tier) => (
+              <option key={tier.id} value={tier.id}>
+                {tier.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Date Selection */}
         <div className="flex flex-col space-y-3">
           <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Dates</label>
@@ -232,47 +241,59 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
               </PopoverContent>
             </Popover>
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal h-14 text-base",
-                    !endDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-3 h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="text-xs text-muted-foreground">Finish</span>
-                    <span className="text-sm">{endDate ? format(endDate, "MMM d, yyyy") : "Add date"}</span>
-                  </div>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={endDate || undefined}
-                  onSelect={(date) => setEndDate(date || null)}
-                  disabled={(date) =>
-                    !startDate ||
-                    date <= startDate ||
-                    unavailableDates.includes(date.toISOString()) ||
-                    hasUnavailableDateBetween(unavailableDates, startDate, date)
-                  }
-                />
-              </PopoverContent>
-            </Popover>
+            {currentTier?.id !== 'per_hour' ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal h-14 text-base",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-3 h-5 w-5" />
+                    <div className="flex flex-col items-start">
+                      <span className="text-xs text-muted-foreground">Finish</span>
+                      <span className="text-sm">{endDate ? format(endDate, "MMM d, yyyy") : "Add date"}</span>
+                    </div>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={endDate || undefined}
+                    onSelect={(date) => setEndDate(date || null)}
+                    disabled={(date) =>
+                      !startDate ||
+                      currentTier?.id === 'per_hour' ||
+                      date <= startDate ||
+                      unavailableDates.includes(date.toISOString()) ||
+                      hasUnavailableDateBetween(unavailableDates, startDate, date)
+                    }
+                  />
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Input
+                type="number"
+                placeholder="Enter hours"
+                min={1}
+                value={selectedDuration}
+                onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                className="w-full h-14 text-base"
+              />
+            )}
           </div>
         </div>
 
         {/* Package Information - Only show when dates are selected */}
-        {startDate && endDate && (
+        {startDate && (
           <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
             <h4 className="font-medium text-muted-foreground uppercase tracking-wide text-sm">Booking Details</h4>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Package:</span>
-                <span className="font-medium">{currentTier.title}</span>
+                <span className="font-medium">{currentTier?.title || 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Base Rate:</span>
@@ -280,7 +301,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Duration</span>
-                <span className="font-medium">{selectedDuration}night{selectedDuration !== 1 ? 's' : ''}</span>
+                <span className="font-medium">{selectedDuration}{currentTier?.id === 'per_hour' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
               {/* Discount preview for non-subscribers */}
               {currentTier?.multiplier !== 1 && (
@@ -315,21 +336,17 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             <div className="flex flex-col">
               <div className="flex items-baseline gap-1">
                 <span className="text-xl md:text-2xl font-bold">
-                  {startDate && endDate ? (
+                  {currentTier ? (
                     `R${(canSeeDiscount ? packageTotal : baseTotal).toFixed(2)}`
                   ) : (
                     `R${effectiveBaseRate}`
                   )}
                 </span>
-                {startDate && endDate ? (
-                  <span className="text-sm text-muted-foreground">total</span>
-                ) : (
-                  <span className="text-sm text-muted-foreground">per night</span>
-                )}
+                <span className="text-sm text-muted-foreground">{currentTier?.id === 'per_hour' ? 'per hour' : 'per night'}</span>
               </div>
-              {startDate && endDate && selectedDuration > 1 && (
+              {currentTier && selectedDuration > 1 && (
                 <span className="text-xs text-muted-foreground">
-                  R{Math.round((canSeeDiscount ? packageTotal : baseTotal) / selectedDuration)} avg/night
+                  R{Math.round((canSeeDiscount ? packageTotal : baseTotal) / selectedDuration)} avg/{currentTier.id === 'per_hour' ? 'hour' : 'night'}
                 </span>
               )}
             </div>
@@ -337,12 +354,12 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             {/* CTA Button */}
             <Button 
               className="bg-primary text-primary-foreground hover:bg-primary/90 text-base font-semibold px-8 py-3 h-auto min-w-[140px]"
-              disabled={!startDate || !endDate || !currentUser?.id}
+              disabled={!startDate || !currentUser?.id || !currentTier || (currentTier.id !== 'per_hour' && !endDate) || (currentTier.id === 'per_hour' && selectedDuration < 1)}
               onClick={handleBookingClick}
             >
               {!currentUser?.id ? (
                 'Log in to book'
-              ) : !startDate || !endDate ? (
+              ) : !startDate || !currentTier || (currentTier.id === 'per_hour' && selectedDuration < 1) || (currentTier.id !== 'per_hour' && !endDate) ? (
                 'Check availability'
               ) : (
                 'Request booking'
@@ -351,11 +368,11 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
           </div>
 
           {/* Additional info for mobile */}
-          {startDate && endDate && (
+          {startDate && (
             <div className="block md:hidden mt-3 pt-3 border-t border-border/50">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
-                <span>{currentTier.title}</span>
-                <span>{selectedDuration}night{selectedDuration !== 1 ? 's' : ''}</span>
+                <span>{currentTier?.title || 'N/A'}</span>
+                <span>{selectedDuration}{currentTier?.id === 'per_hour' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
             </div>
           )}
