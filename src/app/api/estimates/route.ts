@@ -4,10 +4,12 @@ import configPromise from '@/payload.config'
 import { calculateTotal } from '@/lib/calculateTotal'
 
 export async function POST(request: Request) {
+  console.log('=== ESTIMATES API POST REQUEST STARTED ===')
   try {
     let body;
     try {
       body = await request.json();
+      console.log('Request body:', JSON.stringify(body, null, 2));
     } catch (jsonError) {
       console.error('JSON parsing error:', jsonError);
       return new Response(JSON.stringify({ error: 'Invalid JSON in request body' }), { 
@@ -16,10 +18,13 @@ export async function POST(request: Request) {
       });
     }
 
-    const { postId, fromDate, toDate, guests, title, customer, packageType, total } = body;
+    const { postId, fromDate, toDate, guests, title, customer, packageType, total, duration: requestDuration } = body;
+
+    console.log('Destructured body fields:', { postId, fromDate, toDate, guests, title, customer, packageType, total, requestDuration });
 
     // Validate required fields
     if (!postId) {
+      console.error('Validation Error: postId is required');
       return new Response(JSON.stringify({ error: 'postId is required' }), { 
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
@@ -27,6 +32,7 @@ export async function POST(request: Request) {
     }
 
     if (!customer) {
+      console.error('Validation Error: customer is required');
       return new Response(JSON.stringify({ error: 'customer is required' }), { 
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
@@ -34,6 +40,7 @@ export async function POST(request: Request) {
     }
 
     if (!fromDate || !toDate) {
+      console.error('Validation Error: fromDate and toDate are required');
       return new Response(JSON.stringify({ error: 'fromDate and toDate are required' }), { 
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
@@ -44,10 +51,11 @@ export async function POST(request: Request) {
 
     let postRef = postId;
     let baseRate = 150; // Default fallback
-    let multiplier = 1;
+    let postData = null; // To store the fetched post object
 
     // If postId is not a valid ObjectId, look up the post by slug
     if (!/^[a-f\d]{24}$/i.test(postId)) {
+      console.log('Attempting to find post by slug:', postId);
       try {
         const post = await payload.find({
           collection: 'posts',
@@ -55,17 +63,19 @@ export async function POST(request: Request) {
           limit: 1,
         });
         if (!post.docs.length) {
+          console.error('Post not found by slug:', postId);
           return new Response(JSON.stringify({ error: 'Post not found' }), { 
             status: 400, 
             headers: { 'Content-Type': 'application/json' } 
           });
         }
-        postRef = post.docs[0]?.id;
+        postData = post.docs[0];
+        postRef = postData.id;
         // Use proper fallback logic - only use 150 if baseRate is null, undefined, or NaN
-        baseRate = (typeof post.docs[0]?.baseRate === 'number' && !isNaN(post.docs[0].baseRate)) 
-          ? post.docs[0].baseRate 
+        baseRate = (typeof postData.baseRate === 'number' && !isNaN(postData.baseRate)) 
+          ? postData.baseRate 
           : 150;
-        console.log('Found post by slug, baseRate:', baseRate, 'from post:', post.docs[0]?.baseRate);
+        console.log('Found post by slug, baseRate:', baseRate, 'from postData.baseRate:', postData.baseRate);
       } catch (postError) {
         console.error('Error finding post by slug:', postError);
         return new Response(JSON.stringify({ error: 'Error finding post' }), { 
@@ -75,14 +85,22 @@ export async function POST(request: Request) {
       }
     } else {
       // If postId is an ObjectId, fetch the post to get baseRate
+      console.log('Attempting to find post by ID:', postId);
       try {
         const post = await payload.findByID({ collection: 'posts', id: postId });
         if (post) {
+          postData = post;
           // Use proper fallback logic - only use 150 if baseRate is null, undefined, or NaN
-          baseRate = (typeof post.baseRate === 'number' && !isNaN(post.baseRate)) 
-            ? post.baseRate 
+          baseRate = (typeof postData.baseRate === 'number' && !isNaN(postData.baseRate)) 
+            ? postData.baseRate 
             : 150;
-          console.log('Found post by ID, baseRate:', baseRate, 'from post:', post.baseRate);
+          console.log('Found post by ID, baseRate:', baseRate, 'from postData.baseRate:', postData.baseRate);
+        } else {
+          console.error('Post not found by ID:', postId);
+          return new Response(JSON.stringify({ error: 'Post not found' }), { 
+            status: 400, 
+            headers: { 'Content-Type': 'application/json' } 
+          });
         }
       } catch (postError) {
         console.error('Error finding post by ID:', postError);
@@ -93,39 +111,34 @@ export async function POST(request: Request) {
       }
     }
 
-    // Calculate duration
-    let duration = 1;
-    if (fromDate && toDate) {
-      try {
-        const start = new Date(fromDate);
-        const end = new Date(toDate);
-        const diffTime = Math.abs(end.getTime() - start.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays > 0) duration = diffDays;
-      } catch (dateError) {
-        console.error('Error parsing dates:', dateError);
-        return new Response(JSON.stringify({ error: 'Invalid date format' }), { 
-          status: 400, 
-          headers: { 'Content-Type': 'application/json' } 
-        });
-      }
-    }
+    let duration = requestDuration || 1;
+    let packageMultiplier = 1;
 
-    // Determine multiplier based on packageType
-    if (packageType === 'wine') {
-      multiplier = 1.5;
-    } else if (packageType === 'hiking') {
-      multiplier = 1.2;
-    } else if (packageType === 'film') {
-      multiplier = 2;
+    // Find the selected package type from the post's packageTypes array
+    console.log('Post data packageTypes:', postData?.packageTypes);
+    console.log('Requested packageType:', packageType);
+
+    const selectedPackage = postData?.packageTypes?.find(pkg => pkg.id === packageType);
+    if (selectedPackage) {
+      packageMultiplier = selectedPackage.multiplier || 1;
+      console.log('Found selected package:', selectedPackage);
+      console.log('Package multiplier:', packageMultiplier);
+
+      // If it's an hourly package, ensure duration is from requestDuration
+      if (selectedPackage.name.toLowerCase().includes('hour')) {
+        duration = requestDuration || 1; // Use requestDuration for hourly
+        console.log('Hourly package detected, using requestDuration:', duration);
+      }
     } else {
-      multiplier = 1; // standard package
+      console.warn('Selected package not found in postData.packageTypes. Using default multiplier.');
     }
 
     // Calculate total (use provided total if available, otherwise calculate)
-    const calculatedTotal = total !== undefined ? Number(total) : calculateTotal(baseRate, duration, multiplier);
+    const calculatedTotal = total !== undefined ? Number(total) : calculateTotal(baseRate, duration, packageMultiplier);
+    console.log('Calculated total:', calculatedTotal);
     
     if (isNaN(calculatedTotal)) {
+      console.error('Validation Error: Invalid total amount', calculatedTotal);
       return new Response(JSON.stringify({ error: 'Invalid total amount' }), { 
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
@@ -134,9 +147,11 @@ export async function POST(request: Request) {
 
     // Ensure customer is just the ID
     const customerId = typeof customer === 'object' && customer !== null ? customer.id : customer;
+    console.log('Customer ID:', customerId);
 
     // Validate customer ID
     if (!customerId || typeof customerId !== 'string') {
+      console.error('Validation Error: Invalid customer ID', customerId);
       return new Response(JSON.stringify({ error: 'Invalid customer ID' }), { 
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
@@ -145,6 +160,7 @@ export async function POST(request: Request) {
 
     // Check for existing estimate for this post/customer/dates
     try {
+      console.log('Checking for existing estimate...');
       const existing = await payload.find({
         collection: 'estimates',
         where: {
@@ -157,6 +173,7 @@ export async function POST(request: Request) {
       });
       
       if (existing.docs.length) {
+        console.log('Existing estimate found, updating:', existing.docs[0].id);
         // Update the existing estimate with the new total and other fields
         const updated = await payload.update({
           collection: 'estimates',
@@ -170,11 +187,13 @@ export async function POST(request: Request) {
             packageType: packageType || 'standard',
           },
         });
+        console.log('Estimate updated successfully:', updated.id);
         return new Response(JSON.stringify(updated), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       }
+      console.log('No existing estimate found.');
     } catch (existingError) {
       console.error('Error checking existing estimates:', existingError);
       // Continue to create new estimate
@@ -182,10 +201,11 @@ export async function POST(request: Request) {
 
     // Create new estimate
     try {
+      console.log('Creating new estimate...');
       const estimate = await payload.create({
         collection: 'estimates',
         data: {
-          title: title || `Estimate for ${postRef}`,
+          title: title || `Estimate for ${postData?.title || postRef}`,
           post: postRef,
           fromDate,
           toDate,
@@ -196,6 +216,7 @@ export async function POST(request: Request) {
         },
       });
 
+      console.log('Estimate created successfully:', estimate.id);
       return new Response(JSON.stringify(estimate), {
         status: 201,
         headers: { 'Content-Type': 'application/json' },
@@ -212,7 +233,7 @@ export async function POST(request: Request) {
     }
 
   } catch (err) {
-    console.error('Estimates API error:', err);
+    console.error('Estimates API outer error:', err);
     return new Response(JSON.stringify({ 
       error: 'Internal server error', 
       details: err instanceof Error ? err.message : 'Unknown error' 
@@ -220,11 +241,13 @@ export async function POST(request: Request) {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
+  } finally {
+    console.log('=== ESTIMATES API POST REQUEST FINISHED ===');
   }
 }
 
 export async function DELETE(req: Request) {
-  console.log('=== ESTIMATES API DELETE REQUEST ===')
+  console.log('=== ESTIMATES API DELETE REQUEST STARTED ===')
   
   try {
     const payload = await getPayload({ config: configPromise })
@@ -343,5 +366,7 @@ export async function DELETE(req: Request) {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
+  } finally {
+    console.log('=== ESTIMATES API DELETE REQUEST FINISHED ===');
   }
 }

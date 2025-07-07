@@ -10,7 +10,7 @@ import { CalendarIcon } from 'lucide-react'
 import type { EstimateBlockType } from './types'
 import { useUserContext } from '@/context/UserContext'
 import { useSubscription } from '@/hooks/useSubscription'
-import { isHost } from '@/access/isAdmin'
+import { Input } from '@/components/ui/input'
 
 import { calculateTotal } from '@/lib/calculateTotal'
 import { hasUnavailableDateBetween } from '@/utilities/hasUnavailableDateBetween'
@@ -30,6 +30,7 @@ type PackageTier = {
   minNights: number;
   maxNights: number;
   multiplier: number;
+  type: 'hourly' | 'daily';
 };
 
 // Helper to get a valid base rate
@@ -71,6 +72,8 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [currentTier, setCurrentTier] = useState<PackageTier | undefined>(undefined);
   const [unavailableDates, setUnavailableDates] = useState<string[]>([])
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+
   const { currentUser } = useUserContext()
   const { isSubscribed } = useSubscription()
   const isCustomer = !!currentUser
@@ -89,6 +92,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             minNights: pkg.minNights || 1,
             maxNights: pkg.maxNights || 1,
             multiplier: pkg.multiplier || 1.0,
+            type: (pkg.minNights === 1 && pkg.maxNights === 1 && pkg.name.toLowerCase().includes('hour')) ? 'hourly' : 'daily', // Infer type
           }));
           setPackageTiers(generatedTiers);
           // Set initial selected package to the first one, or 'per_night' if available
@@ -117,7 +121,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       setCurrentTier(tier);
 
       // Reset dates and duration if package type changes significantly
-      if (tier?.id === 'per_hour') {
+      if (tier?.type === 'hourly') {
         setEndDate(startDate); // Ensure endDate is same as startDate for hourly
       } else if (startDate && endDate && tier && (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) < tier.minNights) {
         // If current duration is less than new minNights, reset endDate
@@ -126,11 +130,39 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
     }
   }, [selectedPackageId, packageTiers, startDate, endDate]);
 
-  useEffect(() => {
-    if (startDate && currentTier) {
-      let duration = 1;
+  const [selectedDayDuration, setSelectedDayDuration] = useState(0);
 
-      if (currentTier.id === 'per_hour') {
+  useEffect(() => {
+    if (startDate && endDate) {
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setSelectedDayDuration(diffDays);
+    } else {
+      setSelectedDayDuration(0);
+    }
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    if (startDate) {
+      let duration = 1;
+      let tier: PackageTier | undefined;
+
+      const availablePackages = packageTiers.filter(pkg => {
+        if (selectedDayDuration === 1) {
+          return true; // Show all packages for single day selection
+        } else if (selectedDayDuration > 1) {
+          return pkg.type === 'daily'; // Only show daily packages for multi-day selection
+        }
+        return false;
+      });
+
+      // If the currently selected package is no longer available, reset it
+      if (selectedPackageId && !availablePackages.some(pkg => pkg.id === selectedPackageId)) {
+        setSelectedPackageId(null);
+        setCurrentTier(undefined);
+      }
+
+      if (currentTier?.type === 'hourly') {
         duration = selectedDuration; // Use the manually set hours
         setEndDate(startDate); // For hourly, end date is same as start date
       } else if (endDate) {
@@ -139,13 +171,25 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         if (duration < 1 || startDate >= endDate) {
           setEndDate(null);
         }
-      } else { // If no endDate and not per_hour, default to 1 day
+      } else { // If no endDate and not hourly, default to 1 day
         duration = 1;
       }
 
       setSelectedDuration(duration);
+      // If currentTier is undefined, try to set a default from available packages
+      if (!currentTier && availablePackages.length > 0) {
+        setSelectedPackageId(availablePackages[0].id);
+        setCurrentTier(availablePackages[0]);
+      } else if (selectedPackageId) {
+        setCurrentTier(getValidTierById(selectedPackageId));
+      }
+    } else { // If startDate is null, reset everything
+      setSelectedDuration(1);
+      setSelectedPackageId(null);
+      setCurrentTier(undefined);
+      setEndDate(null);
     }
-  }, [startDate, endDate, selectedDuration, currentTier]);
+  }, [startDate, endDate, selectedDuration, selectedPackageId, packageTiers, selectedDayDuration]);
 
   useEffect(() => {
     fetchUnavailableDates(postId).then((dates) => setUnavailableDates(dates))
@@ -156,18 +200,23 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   }
 
   const handleBookingClick = async () => {
-    if (!startDate || !currentUser?.id || !currentTier || (currentTier.id !== 'per_hour' && !endDate) || (currentTier.id === 'per_hour' && selectedDuration < 1)) return;
+    if (!startDate || !currentUser?.id || !currentTier || (currentTier.type === 'hourly' && !selectedTime)) return;
 
-    const fromDate = startDate.toISOString();
-    const toDate = currentTier.id === 'per_hour' ? startDate.toISOString() : (endDate?.toISOString() || fromDate);
+    const fromDate = new Date(startDate);
+    if (currentTier.type === 'hourly' && selectedTime) {
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      fromDate.setHours(hours, minutes, 0, 0);
+    }
+
+    const toDate = currentTier.type === 'hourly' ? fromDate : (endDate || fromDate);
 
     const res = await fetch('/api/estimates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         postId,
-        fromDate,
-        toDate,
+        fromDate: fromDate.toISOString(),
+        toDate: toDate.toISOString(),
         guests: [], // or your guests data
         total: canSeeDiscount ? packageTotal : baseTotal,
         customer: currentUser.id,
@@ -201,7 +250,14 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             onChange={(e) => setSelectedPackageId(e.target.value)}
             className="w-full p-3 border border-border rounded-md bg-background text-foreground"
           >
-            {packageTiers.map((tier) => (
+            {packageTiers.filter(pkg => {
+              if (selectedDayDuration === 1) {
+                return true; // Show all packages for single day selection
+              } else if (selectedDayDuration > 1) {
+                return pkg.type === 'daily'; // Only show daily packages for multi-day selection
+              }
+              return false;
+            }).map((tier) => (
               <option key={tier.id} value={tier.id}>
                 {tier.title}
               </option>
@@ -241,7 +297,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
               </PopoverContent>
             </Popover>
 
-            {currentTier?.id !== 'per_hour' ? (
+            {currentTier?.type === 'daily' ? (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -265,7 +321,6 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                     onSelect={(date) => setEndDate(date || null)}
                     disabled={(date) =>
                       !startDate ||
-                      currentTier?.id === 'per_hour' ||
                       date <= startDate ||
                       unavailableDates.includes(date.toISOString()) ||
                       hasUnavailableDateBetween(unavailableDates, startDate, date)
@@ -275,11 +330,10 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
               </Popover>
             ) : (
               <Input
-                type="number"
-                placeholder="Enter hours"
-                min={1}
-                value={selectedDuration}
-                onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                type="time"
+                placeholder="Select time"
+                value={selectedTime || ''}
+                onChange={(e) => setSelectedTime(e.target.value)}
                 className="w-full h-14 text-base"
               />
             )}
@@ -287,13 +341,13 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         </div>
 
         {/* Package Information - Only show when dates are selected */}
-        {startDate && (
+        {startDate && currentTier && (
           <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
             <h4 className="font-medium text-muted-foreground uppercase tracking-wide text-sm">Booking Details</h4>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Package:</span>
-                <span className="font-medium">{currentTier?.title || 'N/A'}</span>
+                <span className="font-medium">{currentTier.title}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Base Rate:</span>
@@ -301,17 +355,17 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Duration</span>
-                <span className="font-medium">{selectedDuration}{currentTier?.id === 'per_hour' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
+                <span className="font-medium">{selectedDuration}{currentTier.type === 'hourly' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
               {/* Discount preview for non-subscribers */}
-              {currentTier?.multiplier !== 1 && (
+              {currentTier.multiplier !== 1 && (
                 <div className="flex justify-between items-center text-green-600">
                   <span className="text-sm">Discount:</span>
-                  <span className="font-medium">{((1 - (currentTier?.multiplier ?? 1)) * 100).toFixed(0)}% off</span>
+                  <span className="font-medium">{((1 - currentTier.multiplier) * 100).toFixed(0)}% off</span>
                 </div>
               )}
               {/* Show locked package total for non-subscribers */}
-              {currentTier?.multiplier !== 1 && !canSeeDiscount && (
+              {currentTier.multiplier !== 1 && !canSeeDiscount && (
                 <div className="flex justify-between items-center text-gray-500 border-t pt-3">
                   <span className="text-sm">With subscription:</span>
                   <div className="text-right">
@@ -342,11 +396,11 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                     `R${effectiveBaseRate}`
                   )}
                 </span>
-                <span className="text-sm text-muted-foreground">{currentTier?.id === 'per_hour' ? 'per hour' : 'per night'}</span>
+                <span className="text-sm text-muted-foreground">{currentTier?.type === 'hourly' ? 'per hour' : 'per night'}</span>
               </div>
               {currentTier && selectedDuration > 1 && (
                 <span className="text-xs text-muted-foreground">
-                  R{Math.round((canSeeDiscount ? packageTotal : baseTotal) / selectedDuration)} avg/{currentTier.id === 'per_hour' ? 'hour' : 'night'}
+                  R{Math.round((canSeeDiscount ? packageTotal : baseTotal) / selectedDuration)} avg/{currentTier.type === 'hourly' ? 'hour' : 'night'}
                 </span>
               )}
             </div>
@@ -354,12 +408,12 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             {/* CTA Button */}
             <Button 
               className="bg-primary text-primary-foreground hover:bg-primary/90 text-base font-semibold px-8 py-3 h-auto min-w-[140px]"
-              disabled={!startDate || !currentUser?.id || !currentTier || (currentTier.id !== 'per_hour' && !endDate) || (currentTier.id === 'per_hour' && selectedDuration < 1)}
+              disabled={!startDate || !currentUser?.id || !currentTier || (currentTier.type === 'daily' && !endDate) || (currentTier.type === 'hourly' && !selectedTime)}
               onClick={handleBookingClick}
             >
               {!currentUser?.id ? (
                 'Log in to book'
-              ) : !startDate || !currentTier || (currentTier.id === 'per_hour' && selectedDuration < 1) || (currentTier.id !== 'per_hour' && !endDate) ? (
+              ) : !startDate || !currentTier || (currentTier.type === 'daily' && !endDate) || (currentTier.type === 'hourly' && !selectedTime) ? (
                 'Check availability'
               ) : (
                 'Request booking'
@@ -368,11 +422,11 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
           </div>
 
           {/* Additional info for mobile */}
-          {startDate && (
+          {startDate && currentTier && (
             <div className="block md:hidden mt-3 pt-3 border-t border-border/50">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
-                <span>{currentTier?.title || 'N/A'}</span>
-                <span>{selectedDuration}{currentTier?.id === 'per_hour' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
+                <span>{currentTier.title}</span>
+                <span>{selectedDuration}{currentTier.type === 'hourly' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
               </div>
             </div>
           )}
@@ -380,4 +434,4 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       </div>
     </>
   )
-} 
+}
