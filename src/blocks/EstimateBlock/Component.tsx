@@ -351,6 +351,97 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
     fetchUnavailableDates(postId).then((dates) => setUnavailableDates(dates))
   }, [postId])
 
+  // Helper function to filter packages based on selected duration
+  const getFilteredPackagesByDuration = (): PackageTier[] => {
+    if (!startDate || !endDate) {
+      // If no dates selected, show all available packages
+      return filterPackagesByEntitlements(packageTiers)
+    }
+
+    const diffMs = endDate.getTime() - startDate.getTime()
+    const diffDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+    
+    // Apply entitlement filtering first
+    const entitlementFilteredTiers = filterPackagesByEntitlements(packageTiers)
+    
+    // Then filter by duration compatibility
+    const filteredTiers = entitlementFilteredTiers.filter(tier => {
+      // For hourly packages, always show if dates are same day or consecutive
+      if (tier.baseTemplate === 'per_hour') {
+        return diffDays <= 2 // Show hourly for same day or next day bookings
+      }
+      
+      // For overnight packages, be more restrictive about duration matching
+      const minNights = tier.minNights || 1
+      const maxNights = tier.maxNights || 365
+      
+      // Show packages that are appropriate for the selected duration
+      // Be more strict: only show if duration is within 80% to 120% of the package's optimal range
+      const isWithinOptimalRange = diffDays >= Math.floor(minNights * 0.8) && diffDays <= Math.ceil(maxNights * 1.2)
+      
+      // Additional filtering for very specific packages
+      if (tier.baseTemplate === 'monthly' && diffDays < 14) return false // Don't show monthly for short stays
+      if (tier.baseTemplate === 'weekly' && diffDays < 3) return false // Don't show weekly for very short stays
+      if (tier.baseTemplate === 'three_nights' && (diffDays < 2 || diffDays > 5)) return false // Only show 3-night for 2-5 day stays
+      
+      return isWithinOptimalRange
+    })
+
+    console.log('Duration filtering:', {
+      selectedDuration: diffDays,
+      totalPackages: packageTiers.length,
+      afterEntitlements: entitlementFilteredTiers.length,
+      afterDuration: filteredTiers.length,
+      availablePackages: filteredTiers.map(t => ({ id: t.id, title: t.title, baseTemplate: t.baseTemplate }))
+    })
+
+    return filteredTiers
+  }
+
+  // Get filtered package tiers
+  const filteredPackageTiers = getFilteredPackagesByDuration()
+
+  // Auto-select appropriate tier when duration changes
+  useEffect(() => {
+    if (!startDate || !endDate) return
+
+    const diffMs = endDate.getTime() - startDate.getTime()
+    const diffDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+    const isHourlySelection = diffMs <= 24 * 60 * 60 * 1000 // Same day or very short
+
+    // Auto-select the most appropriate tier
+    let newTier: PackageTier | null = null
+
+    if (isHourlySelection) {
+      // For same-day bookings, prefer hourly packages
+      newTier = filteredPackageTiers.find(tier => tier.baseTemplate === 'per_hour') || filteredPackageTiers[0] || null
+    } else {
+      // For multi-day bookings, find the best match
+      const appropriateTiers = filteredPackageTiers.filter(tier => {
+        const minNights = tier.minNights || 1
+        const maxNights = tier.maxNights || 365
+        return diffDays >= minNights && diffDays <= maxNights
+      })
+
+      if (appropriateTiers.length > 0) {
+        // Prefer the tier with the smallest range that still fits
+        newTier = appropriateTiers.reduce((best, tier) => {
+          const bestRange = (best.maxNights || 365) - (best.minNights || 1)
+          const tierRange = (tier.maxNights || 365) - (tier.minNights || 1)
+          return tierRange < bestRange ? tier : best
+        })
+      } else {
+        // Fallback to first available tier
+        newTier = filteredPackageTiers[0] || null
+      }
+    }
+
+    if (newTier && (!currentTier || currentTier.id !== newTier.id)) {
+      setCurrentTier(newTier)
+      console.log(`Auto-selected tier: ${newTier.id} for ${diffDays} days`)
+    }
+  }, [startDate, endDate, filteredPackageTiers, currentTier])
+
   if (blockType !== 'stayDuration') {
     return null
   }
@@ -588,29 +679,33 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
           )}
         </div>
 
-        {/* Package Selection - Now positioned after Select Dates */}
-        <div className="flex flex-col space-y-3">
-          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Package Type</label>
-          <div className="flex flex-wrap gap-2">
-            {packageTiers.map((tier) => {
-              // Get the icon component for this package type
-              const IconComponent = getPackageIconComponent(tier.id)
-              
-              return (
-                <Button
-                  key={tier.id}
-                  variant={currentTier?.id === tier.id ? "default" : "outline"}
-                  className="h-auto p-3 flex items-center gap-2 text-left"
-                  onClick={() => {
-                    setCurrentTier(tier);
-                  }}
-                >
-                  <IconComponent className="h-4 w-4 flex-shrink-0" />
-                  <span className="font-medium">{tier.title}</span>
-                </Button>
-              )
-            })}
-          </div>
+        {/* Package Selection */}
+        <div className="space-y-4">
+          <Label className="text-lg font-semibold">Quick suggestion</Label>
+          {filteredPackageTiers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {filteredPackageTiers.map((tier) => {
+                const IconComponent = getPackageIconComponent(tier.id)
+                return (
+                  <Button
+                    key={tier.id}
+                    variant={currentTier?.id === tier.id ? 'secondary' : 'outline'}
+                    onClick={() => setCurrentTier(tier)}
+                    className="flex items-center gap-2 text-left justify-start"
+                  >
+                    {IconComponent && <IconComponent className="h-4 w-4" />}
+                    <span>{tier.title}</span>
+                  </Button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-center p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-amber-800 text-sm">
+                No packages available for the selected dates. Please adjust your date selection.
+              </p>
+            </div>
+          )}
         </div>
         
         {/* Package Information - Only show when dates are selected */}

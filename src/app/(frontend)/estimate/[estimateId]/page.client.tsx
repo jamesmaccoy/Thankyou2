@@ -103,7 +103,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
 
   // Use estimate data for totals and duration
   const _bookingDuration = data?.fromDate && data?.toDate
-    ? Math.max(1, Math.round((new Date(data.toDate).getTime() - new Date(data.fromDate).getTime()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(1, Math.ceil((new Date(data.toDate).getTime() - new Date(data.fromDate).getTime()) / (1000 * 60 * 60 * 24)))
     : 1;
   const _bookingTotal = data?.total ?? 0;
   const _postId = typeof data?.post === 'object' && data?.post?.id ? data.post.id : (typeof data?.post === 'string' ? data.post : '')
@@ -396,7 +396,6 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const getBestPackageForDuration = (duration: number, packages: Record<string, EnhancedPackageDetails>): string | null => {
     // Package priority for different durations
     const packagePreferences = [
-      { min: 1, max: 1, preferred: ['per_hour', 'per_night', 'luxury_night'] },
       { min: 1, max: 1, preferred: ['per_night', 'luxury_night'] },
       { min: 2, max: 3, preferred: ['three_nights', 'per_night', 'luxury_night'] },
       { min: 4, max: 6, preferred: ['three_nights', 'per_night', 'luxury_night'] },
