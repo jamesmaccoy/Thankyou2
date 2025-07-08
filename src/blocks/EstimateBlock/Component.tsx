@@ -18,6 +18,16 @@ import { CheckCircle, ChevronLeftIcon, UserIcon } from 'lucide-react'
 
 import { calculateTotal } from '@/lib/calculateTotal'
 import { hasUnavailableDateBetween } from '@/utilities/hasUnavailableDateBetween'
+// Import entitlement-based package filtering functions
+import { 
+  getAvailablePackagesForUser, 
+  getUserTierFromEntitlements, 
+  getPackageForUserTier,
+  PACKAGE_TYPES,
+  type BaseTemplate,
+  type UserTier,
+  type PackageTypeTemplate
+} from '@/lib/package-types'
 
 export type EstimateBlockProps = EstimateBlockType & {
   className?: string
@@ -74,9 +84,42 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   const [endTime, setEndTime] = useState<string>('17:00')
   
   const { currentUser } = useUserContext()
-  const { isSubscribed } = useSubscription()
+  const { isSubscribed, entitlements } = useSubscription()
   const isCustomer = !!currentUser
   const canSeeDiscount = isCustomer && isSubscribed
+
+  // Get user tier and available packages based on entitlements
+  const userTier = getUserTierFromEntitlements(entitlements)
+  const availablePackages = getAvailablePackagesForUser(entitlements)
+
+  // Helper function to filter packages based on user entitlements
+  const filterPackagesByEntitlements = (packages: PackageTier[]): PackageTier[] => {
+    if (!currentUser) {
+      // Guest users only get basic packages
+      return packages.filter(pkg => 
+        pkg.baseTemplate === 'per_hour' || 
+        pkg.baseTemplate === 'per_night' || 
+        pkg.baseTemplate === 'three_nights'
+      )
+    }
+
+    return packages.filter(pkg => {
+      // For each package, check if user has access based on their tier
+      const packageId = getPackageForUserTier(pkg.baseTemplate, userTier)
+      
+      // If user has the appropriate package for this tier, include it
+      if (packageId && availablePackages[packageId]) {
+        return true
+      }
+      
+      // Also allow basic packages for all authenticated users
+      if (pkg.baseTemplate === 'per_hour' || pkg.baseTemplate === 'per_night') {
+        return true
+      }
+      
+      return false
+    })
+  }
 
   // Fetch post data and build package tiers
   useEffect(() => {
@@ -86,11 +129,11 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         const response = await fetch(`/api/posts/${postId}`)
         if (response.ok) {
           const result = await response.json()
-          const post = result.doc
+          const post = result
           setPostData(post)
           
           // Build package tiers from post data
-          const tiers: PackageTier[] = []
+          let tiers: PackageTier[] = []
           
           // If post has packageTypes, use those
           if (post?.packageTypes && Array.isArray(post.packageTypes) && post.packageTypes.length > 0) {
@@ -152,6 +195,9 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             tiers.push(...defaultTiers)
           }
           
+          // Apply entitlement-based filtering
+          tiers = filterPackagesByEntitlements(tiers)
+          
           setPackageTiers(tiers)
           
           // Set initial tier
@@ -162,7 +208,7 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       } catch (error) {
         console.error('Error fetching post data:', error)
         // Fallback to basic packages including per_hour
-        const fallbackTiers: PackageTier[] = [
+        let fallbackTiers: PackageTier[] = [
           {
             id: "per_hour",
             title: "Per Hour",
@@ -180,6 +226,10 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             baseTemplate: 'per_night' as const,
           }
         ]
+        
+        // Apply entitlement-based filtering to fallback tiers too
+        fallbackTiers = filterPackagesByEntitlements(fallbackTiers)
+        
         setPackageTiers(fallbackTiers)
         if (fallbackTiers.length > 0 && fallbackTiers[0]) {
           setCurrentTier(fallbackTiers[0])
@@ -190,12 +240,13 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
     }
 
     fetchPostData()
-  }, [postId])
+  }, [postId, currentUser, userTier, entitlements]) // Include entitlement dependencies
 
   // Helper function to map template IDs to base templates
   const getBaseTemplate = (templateIdOrName: string): PackageTier['baseTemplate'] => {
     const template = templateIdOrName.toLowerCase()
-    if (template.includes('hour')) return 'per_hour'
+    // Be more specific about hourly detection to avoid false positives
+    if (template.includes('per_hour') || template.includes('per hour') || template.includes('hourly') || template === 'hour') return 'per_hour'
     if (template.includes('night') || template === 'per_night') return 'per_night'
     if (template.includes('three') || template === 'three_nights') return 'three_nights'
     if (template.includes('week') || template === 'weekly') return 'weekly'
@@ -373,6 +424,30 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         className={cn('flex flex-col space-y-6 p-6 bg-card rounded-lg border border-border mb-24 md:mb-8', className)}
       >
         <h3 className="text-xl font-semibold">Estimate</h3>
+        
+        {/* User Tier Indicator - Only show for authenticated users */}
+        {currentUser && (
+          <div className="p-3 bg-muted/50 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">
+                  Your tier: <span className="capitalize">{userTier}</span>
+                </span>
+              </div>
+              {userTier === 'guest' && entitlements.length === 0 && (
+                <Button variant="outline" size="sm" className="text-xs">
+                  Upgrade for discounts
+                </Button>
+              )}
+            </div>
+            {userTier === 'guest' && entitlements.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Subscribe to unlock premium packages and get discounts on all bookings
+              </p>
+            )}
+          </div>
+        )}
         
         {/* Package Selection */}
         <div className="flex flex-col space-y-3">
