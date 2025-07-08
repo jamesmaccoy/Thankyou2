@@ -5,12 +5,16 @@ import { cn } from '@/utilities/cn'
 import { format } from 'date-fns'
 import { Calendar } from '@/components/ui/calendar'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CalendarIcon } from 'lucide-react'
 import type { EstimateBlockType } from './types'
 import { useUserContext } from '@/context/UserContext'
 import { useSubscription } from '@/hooks/useSubscription'
-import { Input } from '@/components/ui/input'
+import { isHost } from '@/access/isAdmin'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CheckCircle, ChevronLeftIcon, UserIcon } from 'lucide-react'
 
 import { calculateTotal } from '@/lib/calculateTotal'
 import { hasUnavailableDateBetween } from '@/utilities/hasUnavailableDateBetween'
@@ -30,7 +34,7 @@ type PackageTier = {
   minNights: number;
   maxNights: number;
   multiplier: number;
-  type: 'hourly' | 'daily';
+  baseTemplate: 'per_hour' | 'per_night' | 'three_nights' | 'weekly' | 'monthly';
 };
 
 // Helper to get a valid base rate
@@ -54,142 +58,237 @@ function fetchUnavailableDates(postId: string): Promise<string[]> {
     .then((data) => data.unavailableDates || [])
 }
 
-async function fetchPost(postId: string) {
-  const res = await fetch(`/api/posts/${postId}`);
-  if (!res.ok) {
-    throw new Error('Failed to fetch post data');
-  }
-  return res.json();
-}
-
-
 export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRate = 150, baseRateOverride, blockType, postId }) => {
   const effectiveBaseRate = getValidBaseRate(baseRate, baseRateOverride);
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [endDate, setEndDate] = useState<Date | null>(null)
   const [selectedDuration, setSelectedDuration] = useState(1)
-  const [packageTiers, setPackageTiers] = useState<PackageTier[]>([]);
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
-  const [currentTier, setCurrentTier] = useState<PackageTier | undefined>(undefined);
   const [unavailableDates, setUnavailableDates] = useState<string[]>([])
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-
+  const [packageTiers, setPackageTiers] = useState<PackageTier[]>([])
+  const [currentTier, setCurrentTier] = useState<PackageTier | null>(null)
+  const [postData, setPostData] = useState<any>(null)
+  const [loadingPackages, setLoadingPackages] = useState(true)
+  
+  // Time selection state for per-hour packages
+  const [startTime, setStartTime] = useState<string>('09:00')
+  const [endTime, setEndTime] = useState<string>('17:00')
+  
   const { currentUser } = useUserContext()
   const { isSubscribed } = useSubscription()
   const isCustomer = !!currentUser
   const canSeeDiscount = isCustomer && isSubscribed
-  const packageTotal = calculateTotal(effectiveBaseRate, selectedDuration, (currentTier?.multiplier ?? 1))
-  const baseTotal = calculateTotal(effectiveBaseRate, selectedDuration, 1)
 
+  // Fetch post data and build package tiers
   useEffect(() => {
-    async function loadPostData() {
+    const fetchPostData = async () => {
+      setLoadingPackages(true)
       try {
-        const post = await fetchPost(postId);
-        if (post && post.packageTypes) {
-          const generatedTiers = post.packageTypes.map((pkg: any) => ({
-            id: pkg.templateId || pkg.name.toLowerCase().replace(/ /g, '_'),
-            title: pkg.name,
-            minNights: pkg.minNights || 1,
-            maxNights: pkg.maxNights || 1,
-            multiplier: pkg.multiplier || 1.0,
-            type: (pkg.minNights === 1 && pkg.maxNights === 1 && pkg.name.toLowerCase().includes('hour')) ? 'hourly' : 'daily', // Infer type
-          }));
-          setPackageTiers(generatedTiers);
-          // Set initial selected package to the first one, or 'per_night' if available
-          const initialPackage = generatedTiers.find(tier => tier.id === 'per_night') || generatedTiers[0];
-          if (initialPackage) {
-            setSelectedPackageId(initialPackage.id);
-            setCurrentTier(initialPackage);
+        const response = await fetch(`/api/posts/${postId}`)
+        if (response.ok) {
+          const result = await response.json()
+          const post = result.doc
+          setPostData(post)
+          
+          // Build package tiers from post data
+          const tiers: PackageTier[] = []
+          
+          // If post has packageTypes, use those
+          if (post?.packageTypes && Array.isArray(post.packageTypes) && post.packageTypes.length > 0) {
+            post.packageTypes.forEach((pkg: any) => {
+              const tier: PackageTier = {
+                id: pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_'),
+                title: pkg.name,
+                minNights: pkg.minNights || (pkg.templateId === 'per_hour' ? 0 : 1),
+                maxNights: pkg.maxNights || (pkg.templateId === 'per_hour' ? 0 : 365),
+                multiplier: pkg.multiplier || 1,
+                baseTemplate: getBaseTemplate(pkg.templateId || pkg.name)
+              }
+              tiers.push(tier)
+            })
+          } else {
+            // Fallback to default packages including per_hour
+            const defaultTiers: PackageTier[] = [
+              {
+                id: "per_hour",
+                title: "Per Hour",
+                minNights: 0,
+                maxNights: 0,
+                multiplier: 1.0,
+                baseTemplate: 'per_hour' as const,
+              },
+              {
+                id: "per_night",
+                title: "Per Night",
+                minNights: 1,
+                maxNights: 1,
+                multiplier: 1.0,
+                baseTemplate: 'per_night' as const,
+              },
+              {
+                id: "three_nights",
+                title: "3 Night Package",
+                minNights: 2,
+                maxNights: 3,
+                multiplier: 0.9,
+                baseTemplate: 'three_nights' as const,
+              },
+              {
+                id: "weekly",
+                title: "Weekly Package",
+                minNights: 4,
+                maxNights: 7,
+                multiplier: 0.8,
+                baseTemplate: 'weekly' as const,
+              },
+              {
+                id: "monthly",
+                title: "Monthly Package",
+                minNights: 29,
+                maxNights: 365,
+                multiplier: 0.7,
+                baseTemplate: 'monthly' as const,
+              }
+            ]
+            tiers.push(...defaultTiers)
+          }
+          
+          setPackageTiers(tiers)
+          
+          // Set initial tier
+          if (tiers.length > 0 && tiers[0]) {
+            setCurrentTier(tiers[0])
           }
         }
       } catch (error) {
-        console.error(error);
+        console.error('Error fetching post data:', error)
+        // Fallback to basic packages including per_hour
+        const fallbackTiers: PackageTier[] = [
+          {
+            id: "per_hour",
+            title: "Per Hour",
+            minNights: 0,
+            maxNights: 0,
+            multiplier: 1.0,
+            baseTemplate: 'per_hour' as const,
+          },
+          {
+            id: "per_night",
+            title: "Per Night",
+            minNights: 1,
+            maxNights: 1,
+            multiplier: 1.0,
+            baseTemplate: 'per_night' as const,
+          }
+        ]
+        setPackageTiers(fallbackTiers)
+        if (fallbackTiers.length > 0 && fallbackTiers[0]) {
+          setCurrentTier(fallbackTiers[0])
+        }
+      } finally {
+        setLoadingPackages(false)
       }
     }
 
-    loadPostData();
-  }, [postId]);
+    fetchPostData()
+  }, [postId])
 
-  // Helper to get a valid tier by ID
-  function getValidTierById(packageId: string): PackageTier | undefined {
-    return packageTiers.find(tier => tier.id === packageId);
+  // Helper function to map template IDs to base templates
+  const getBaseTemplate = (templateIdOrName: string): PackageTier['baseTemplate'] => {
+    const template = templateIdOrName.toLowerCase()
+    if (template.includes('hour')) return 'per_hour'
+    if (template.includes('night') || template === 'per_night') return 'per_night'
+    if (template.includes('three') || template === 'three_nights') return 'three_nights'
+    if (template.includes('week') || template === 'weekly') return 'weekly'
+    if (template.includes('month') || template === 'monthly') return 'monthly'
+    return 'per_night' // default
   }
 
-  useEffect(() => {
-    if (selectedPackageId) {
-      const tier = getValidTierById(selectedPackageId);
-      setCurrentTier(tier);
-
-      // Reset dates and duration if package type changes significantly
-      if (tier?.type === 'hourly') {
-        setEndDate(startDate); // Ensure endDate is same as startDate for hourly
-      } else if (startDate && endDate && tier && (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) < tier.minNights) {
-        // If current duration is less than new minNights, reset endDate
-        setEndDate(null);
-      }
+  // Helper to get a valid tier for duration
+  function getValidTier(diffDays: number): PackageTier | null {
+    if (packageTiers.length === 0) return null
+    
+    // For hourly packages, always return per_hour if available
+    if (diffDays === 0) {
+      const hourlyTier = packageTiers.find(tier => tier.baseTemplate === 'per_hour')
+      if (hourlyTier) return hourlyTier
     }
-  }, [selectedPackageId, packageTiers, startDate, endDate]);
+    
+    // Find tier that matches the duration and is not per_hour
+    const matchingTier = packageTiers.find(tier => 
+      tier.baseTemplate !== 'per_hour' && 
+      diffDays >= tier.minNights && 
+      diffDays <= tier.maxNights
+    );
+    
+    if (matchingTier) return matchingTier;
+    
+    // Fallback to any non-hourly tier
+    const fallbackTier = packageTiers.find(tier => tier.baseTemplate !== 'per_hour');
+    if (fallbackTier) return fallbackTier;
+    
+    // Final fallback to first tier
+    return packageTiers[0] || null;
+  }
 
-  const [selectedDayDuration, setSelectedDayDuration] = useState(0);
+  // Helper to calculate hours from time selection
+  const getSelectedHours = (): number => {
+    if (!startTime || !endTime) return 1;
+    
+    const [startHour = 0, startMin = 0] = startTime.split(':').map(Number);
+    const [endHour = 0, endMin = 0] = endTime.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    let diffMinutes = endMinutes - startMinutes;
+    if (diffMinutes <= 0) diffMinutes += 24 * 60; // Next day
+    
+    return Math.max(1, Math.round(diffMinutes / 60));
+  };
+  
+  // Check if current tier is hourly
+  const isHourlySelected = currentTier?.baseTemplate === 'per_hour'
+  
+  // Calculate quantity based on package type
+  const quantity = isHourlySelected ? getSelectedHours() : selectedDuration
+  
+  // Calculate totals using the new logic
+  const packageTotal = currentTier ? (
+    isHourlySelected 
+      ? Math.round(effectiveBaseRate * currentTier.multiplier * getSelectedHours())
+      : Math.round(effectiveBaseRate * currentTier.multiplier * selectedDuration)
+  ) : 0;
+  
+  const baseTotal = currentTier ? (
+    isHourlySelected 
+      ? Math.round(effectiveBaseRate * getSelectedHours())
+      : Math.round(effectiveBaseRate * selectedDuration)
+  ) : 0;
 
+  // Update the tier when dates change
   useEffect(() => {
     if (startDate && endDate) {
       const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      setSelectedDayDuration(diffDays);
-    } else {
-      setSelectedDayDuration(0);
+      
+      const validTier = getValidTier(diffDays);
+      if (validTier) {
+        setCurrentTier(validTier);
+      }
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, packageTiers]);
 
+  // Update selectedDuration when currentTier changes
   useEffect(() => {
-    if (startDate) {
-      let duration = 1;
-      let tier: PackageTier | undefined;
-
-      const availablePackages = packageTiers.filter(pkg => {
-        if (selectedDayDuration === 1) {
-          return true; // Show all packages for single day selection
-        } else if (selectedDayDuration > 1) {
-          return pkg.type === 'daily'; // Only show daily packages for multi-day selection
-        }
-        return false;
-      });
-
-      // If the currently selected package is no longer available, reset it
-      if (selectedPackageId && !availablePackages.some(pkg => pkg.id === selectedPackageId)) {
-        setSelectedPackageId(null);
-        setCurrentTier(undefined);
-      }
-
-      if (currentTier?.type === 'hourly') {
-        duration = selectedDuration; // Use the manually set hours
-        setEndDate(startDate); // For hourly, end date is same as start date
-      } else if (endDate) {
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-        duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (duration < 1 || startDate >= endDate) {
-          setEndDate(null);
-        }
-      } else { // If no endDate and not hourly, default to 1 day
-        duration = 1;
-      }
-
-      setSelectedDuration(duration);
-      // If currentTier is undefined, try to set a default from available packages
-      if (!currentTier && availablePackages.length > 0) {
-        setSelectedPackageId(availablePackages[0].id);
-        setCurrentTier(availablePackages[0]);
-      } else if (selectedPackageId) {
-        setCurrentTier(getValidTierById(selectedPackageId));
-      }
-    } else { // If startDate is null, reset everything
-      setSelectedDuration(1);
-      setSelectedPackageId(null);
-      setCurrentTier(undefined);
-      setEndDate(null);
+    if (currentTier && startDate && endDate) {
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setSelectedDuration(diffDays);
     }
-  }, [startDate, endDate, selectedDuration, selectedPackageId, packageTiers, selectedDayDuration]);
+  }, [currentTier, startDate, endDate]);
+
+  // Calculate the current user details
+  const { id: customerId, email: emailAddress, name: customerName } = currentUser || {};
 
   useEffect(() => {
     fetchUnavailableDates(postId).then((dates) => setUnavailableDates(dates))
@@ -200,30 +299,42 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
   }
 
   const handleBookingClick = async () => {
-    if (!startDate || !currentUser?.id || !currentTier || (currentTier.type === 'hourly' && !selectedTime)) return;
-
-    const fromDate = new Date(startDate);
-    if (currentTier.type === 'hourly' && selectedTime) {
-      const [hours, minutes] = selectedTime.split(':').map(Number);
-      fromDate.setHours(hours, minutes, 0, 0);
+    // Check validation based on package type
+    if (isHourlySelected) {
+      if (!startDate || !startTime || !endTime) return;
+    } else {
+      if (!startDate || !endDate) return;
     }
-
-    const toDate = currentTier.type === 'hourly' ? fromDate : (endDate || fromDate);
-
+    
+    if (!currentUser?.id) {
+      alert("You must be logged in to create an estimate.");
+      return;
+    }
+    
+    // Prepare the request data
+    const requestData = {
+      postId,
+      fromDate: startDate.toISOString(),
+      toDate: (isHourlySelected ? startDate : endDate)?.toISOString(),
+      guests: [], // or your guests data
+      total: canSeeDiscount ? packageTotal : baseTotal,
+      customer: currentUser.id,
+      packageType: currentTier?.id || 'per_night',
+      duration: quantity,
+      units: isHourlySelected ? 'hours' : 'nights',
+      ...(isHourlySelected && {
+        startTime,
+        endTime,
+        hours: getSelectedHours()
+      })
+    };
+    
     const res = await fetch('/api/estimates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        postId,
-        fromDate: fromDate.toISOString(),
-        toDate: toDate.toISOString(),
-        guests: [], // or your guests data
-        total: canSeeDiscount ? packageTotal : baseTotal,
-        customer: currentUser.id,
-        packageType: currentTier.id,
-        duration: selectedDuration, // Send duration for hourly packages
-      }),
+      body: JSON.stringify(requestData),
     });
+    
     if (res.ok) {
       const estimate = await res.json();
       window.location.href = `/estimate/${estimate.id}`;
@@ -231,7 +342,28 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       const errorText = await res.text();
       alert('Failed to create estimate: ' + errorText);
     }
-  };
+  }
+
+  // Loading state
+  if (loadingPackages) {
+    return (
+      <div className="p-6 border border-gray-200 rounded-lg bg-white">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded mb-4"></div>
+          <div className="h-32 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // No packages available
+  if (packageTiers.length === 0 || !currentTier) {
+    return (
+      <div className="p-6 border border-gray-200 rounded-lg bg-white">
+        <p className="text-gray-500">No booking packages available for this post.</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -244,104 +376,166 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
         
         {/* Package Selection */}
         <div className="flex flex-col space-y-3">
-          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Package</label>
-          <select
-            value={selectedPackageId || ''}
-            onChange={(e) => setSelectedPackageId(e.target.value)}
-            className="w-full p-3 border border-border rounded-md bg-background text-foreground"
-          >
-            {packageTiers.filter(pkg => {
-              if (selectedDayDuration === 1) {
-                return true; // Show all packages for single day selection
-              } else if (selectedDayDuration > 1) {
-                return pkg.type === 'daily'; // Only show daily packages for multi-day selection
-              }
-              return false;
-            }).map((tier) => (
-              <option key={tier.id} value={tier.id}>
-                {tier.title}
-              </option>
+          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Package Type</label>
+          <div className="space-y-2">
+            {packageTiers.map((tier) => (
+              <Button
+                key={tier.id}
+                variant={currentTier?.id === tier.id ? "default" : "outline"}
+                className="h-auto p-3 flex flex-col items-center text-center"
+                onClick={() => {
+                  setCurrentTier(tier);
+                }}
+              >
+                <span className="font-medium">{tier.title}</span>
+                {tier.baseTemplate !== 'per_hour' && (
+                  <span className="text-sm text-muted-foreground">
+                    {tier.minNights === tier.maxNights 
+                      ? `${tier.minNights} night${tier.minNights !== 1 ? 's' : ''}`
+                      : `${tier.minNights}-${tier.maxNights} nights`
+                    }
+                  </span>
+                )}
+              </Button>
             ))}
-          </select>
+          </div>
         </div>
-
-        {/* Date Selection */}
+        
+        {/* Date/Time Selection - Conditional based on package type */}
         <div className="flex flex-col space-y-3">
-          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Dates</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal h-14 text-base",
-                    !startDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-3 h-5 w-5" />
-                  <div className="flex flex-col items-start">
-                    <span className="text-xs text-muted-foreground">Start</span>
-                    <span className="text-sm">{startDate ? format(startDate, "MMM d, yyyy") : "Add date"}</span>
-                  </div>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={startDate || undefined}
-                  onSelect={(date) => setStartDate(date || null)}
-                  disabled={(date) =>
-                    date < new Date() || unavailableDates.includes(date.toISOString())
-                  }
-                />
-              </PopoverContent>
-            </Popover>
-
-            {currentTier?.type === 'daily' ? (
+          {isHourlySelected ? (
+            <>
+              <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Date & Times</label>
+              
+              {/* Date selection for hourly */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal h-14 text-base",
-                      !endDate && "text-muted-foreground"
+                      !startDate && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-3 h-5 w-5" />
                     <div className="flex flex-col items-start">
-                      <span className="text-xs text-muted-foreground">Finish</span>
-                      <span className="text-sm">{endDate ? format(endDate, "MMM d, yyyy") : "Add date"}</span>
+                      <span className="text-xs text-muted-foreground">Date</span>
+                      <span className="text-sm">{startDate ? format(startDate, "MMM d, yyyy") : "Select date"}</span>
                     </div>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    selected={endDate || undefined}
-                    onSelect={(date) => setEndDate(date || null)}
+                    selected={startDate || undefined}
+                    onSelect={(date) => {
+                      setStartDate(date || null)
+                      setEndDate(date || null) // Same day for hourly
+                    }}
                     disabled={(date) =>
-                      !startDate ||
-                      date <= startDate ||
-                      unavailableDates.includes(date.toISOString()) ||
-                      hasUnavailableDateBetween(unavailableDates, startDate, date)
+                      date < new Date() || unavailableDates.includes(date.toISOString())
                     }
                   />
                 </PopoverContent>
               </Popover>
-            ) : (
-              <Input
-                type="time"
-                placeholder="Select time"
-                value={selectedTime || ''}
-                onChange={(e) => setSelectedTime(e.target.value)}
-                className="w-full h-14 text-base"
-              />
-            )}
-          </div>
+              
+              {/* Time selection for hourly */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="start-time">Start Time</Label>
+                  <Input
+                    id="start-time"
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="end-time">End Time</Label>
+                  <Input
+                    id="end-time"
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              {startDate && startTime && endTime && (
+                <div className="text-sm text-muted-foreground text-center">
+                  {getSelectedHours()} hour{getSelectedHours() !== 1 ? 's' : ''} on {format(startDate, "MMM d, yyyy")}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Dates</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-14 text-base",
+                        !startDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-3 h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="text-xs text-muted-foreground">Start</span>
+                        <span className="text-sm">{startDate ? format(startDate, "MMM d, yyyy") : "Add date"}</span>
+                      </div>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={startDate || undefined}
+                      onSelect={(date) => setStartDate(date || null)}
+                      disabled={(date) =>
+                        date < new Date() || unavailableDates.includes(date.toISOString())
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-14 text-base",
+                        !endDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-3 h-5 w-5" />
+                      <div className="flex flex-col items-start">
+                        <span className="text-xs text-muted-foreground">Finish</span>
+                        <span className="text-sm">{endDate ? format(endDate, "MMM d, yyyy") : "Add date"}</span>
+                      </div>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={endDate || undefined}
+                      onSelect={(date) => setEndDate(date || null)}
+                      disabled={(date) =>
+                        !startDate ||
+                        date <= startDate ||
+                        unavailableDates.includes(date.toISOString()) ||
+                        hasUnavailableDateBetween(unavailableDates, startDate, date)
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Package Information - Only show when dates are selected */}
-        {startDate && currentTier && (
+        {((startDate && endDate && !isHourlySelected) || (startDate && startTime && endTime && isHourlySelected)) && (
           <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
             <h4 className="font-medium text-muted-foreground uppercase tracking-wide text-sm">Booking Details</h4>
             <div className="space-y-3">
@@ -354,18 +548,25 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
                 <span className="font-medium">R{effectiveBaseRate}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Duration</span>
-                <span className="font-medium">{selectedDuration}{currentTier.type === 'hourly' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-muted-foreground">
+                  {isHourlySelected ? 'Duration:' : 'Duration:'}
+                </span>
+                <span className="font-medium">
+                  {isHourlySelected 
+                    ? `${getSelectedHours()} hour${getSelectedHours() !== 1 ? 's' : ''}`
+                    : `${selectedDuration} night${selectedDuration !== 1 ? 's' : ''}`
+                  }
+                </span>
               </div>
               {/* Discount preview for non-subscribers */}
-              {currentTier.multiplier !== 1 && (
+              {currentTier?.multiplier !== 1 && (
                 <div className="flex justify-between items-center text-green-600">
                   <span className="text-sm">Discount:</span>
-                  <span className="font-medium">{((1 - currentTier.multiplier) * 100).toFixed(0)}% off</span>
+                  <span className="font-medium">{((1 - (currentTier?.multiplier ?? 1)) * 100).toFixed(0)}% off</span>
                 </div>
               )}
               {/* Show locked package total for non-subscribers */}
-              {currentTier.multiplier !== 1 && !canSeeDiscount && (
+              {currentTier?.multiplier !== 1 && !canSeeDiscount && (
                 <div className="flex justify-between items-center text-gray-500 border-t pt-3">
                   <span className="text-sm">With subscription:</span>
                   <div className="text-right">
@@ -390,17 +591,27 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             <div className="flex flex-col">
               <div className="flex items-baseline gap-1">
                 <span className="text-xl md:text-2xl font-bold">
-                  {currentTier ? (
+                  {((startDate && endDate && !isHourlySelected) || (startDate && startTime && endTime && isHourlySelected)) ? (
                     `R${(canSeeDiscount ? packageTotal : baseTotal).toFixed(2)}`
                   ) : (
                     `R${effectiveBaseRate}`
                   )}
                 </span>
-                <span className="text-sm text-muted-foreground">{currentTier?.type === 'hourly' ? 'per hour' : 'per night'}</span>
+                {((startDate && endDate && !isHourlySelected) || (startDate && startTime && endTime && isHourlySelected)) ? (
+                  <span className="text-sm text-muted-foreground">total</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    {isHourlySelected ? 'per hour' : 'per night'}
+                  </span>
+                )}
               </div>
-              {currentTier && selectedDuration > 1 && (
+              {((startDate && endDate && !isHourlySelected && selectedDuration > 1) || 
+                (startDate && startTime && endTime && isHourlySelected && getSelectedHours() > 1)) && (
                 <span className="text-xs text-muted-foreground">
-                  R{Math.round((canSeeDiscount ? packageTotal : baseTotal) / selectedDuration)} avg/{currentTier.type === 'hourly' ? 'hour' : 'night'}
+                  {isHourlySelected 
+                    ? `R${Math.round((canSeeDiscount ? packageTotal : baseTotal) / getSelectedHours())} avg/hour`
+                    : `R${Math.round((canSeeDiscount ? packageTotal : baseTotal) / selectedDuration)} avg/night`
+                  }
                 </span>
               )}
             </div>
@@ -408,12 +619,16 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
             {/* CTA Button */}
             <Button 
               className="bg-primary text-primary-foreground hover:bg-primary/90 text-base font-semibold px-8 py-3 h-auto min-w-[140px]"
-              disabled={!startDate || !currentUser?.id || !currentTier || (currentTier.type === 'daily' && !endDate) || (currentTier.type === 'hourly' && !selectedTime)}
+              disabled={
+                !currentUser?.id || 
+                (!isHourlySelected && (!startDate || !endDate)) ||
+                (isHourlySelected && (!startDate || !startTime || !endTime))
+              }
               onClick={handleBookingClick}
             >
               {!currentUser?.id ? (
                 'Log in to book'
-              ) : !startDate || !currentTier || (currentTier.type === 'daily' && !endDate) || (currentTier.type === 'hourly' && !selectedTime) ? (
+              ) : (!isHourlySelected && (!startDate || !endDate)) || (isHourlySelected && (!startDate || !startTime || !endTime)) ? (
                 'Check availability'
               ) : (
                 'Request booking'
@@ -422,11 +637,16 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
           </div>
 
           {/* Additional info for mobile */}
-          {startDate && currentTier && (
+          {((startDate && endDate && !isHourlySelected) || (startDate && startTime && endTime && isHourlySelected)) && (
             <div className="block md:hidden mt-3 pt-3 border-t border-border/50">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
                 <span>{currentTier.title}</span>
-                <span>{selectedDuration}{currentTier.type === 'hourly' ? ' hour' : ' night'}{selectedDuration !== 1 ? 's' : ''}</span>
+                <span>
+                  {isHourlySelected 
+                    ? `${getSelectedHours()} hour${getSelectedHours() !== 1 ? 's' : ''}`
+                    : `${selectedDuration} night${selectedDuration !== 1 ? 's' : ''}`
+                  }
+                </span>
               </div>
             </div>
           )}
@@ -434,4 +654,4 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
       </div>
     </>
   )
-}
+} 

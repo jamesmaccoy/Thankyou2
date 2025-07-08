@@ -941,10 +941,11 @@ export default function PlekAdminClient({ user, initialPosts, categories, initia
       console.log('Result.doc.meta:', result.doc?.meta)
       
       // Validate and clean the response
-      if (!result.doc || typeof result.doc !== 'object') {
-        console.error('Invalid API response structure:', result)
-        throw new Error('Invalid server response - missing or malformed post data')
-      }
+      // (Redundant check removed - already validated above)
+      // if (!result.doc || typeof result.doc !== 'object') {
+      //   console.error('Invalid API response structure:', result)
+      //   throw new Error('Invalid server response - missing or malformed post data')
+      // }
       
       // Ensure heroImage field is properly structured
       if (updatedDoc.heroImage && typeof updatedDoc.heroImage === 'object') {

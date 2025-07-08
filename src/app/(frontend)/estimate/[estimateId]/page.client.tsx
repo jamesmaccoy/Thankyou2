@@ -35,6 +35,7 @@ interface EnhancedPackageDetails {
   minNights: number
   maxNights: number
   availableSeasons: string[]
+  baseTemplate?: string
 }
 
 // Helper functions for package tier identification
@@ -123,7 +124,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           const response = await fetch(`/api/posts/${_postId}`)
           if (response.ok) {
             const result = await response.json()
-            const post = result.doc // API returns { doc: post }
+            const post = result // API returns post directly, not { doc: post }
             setPostData(post)
             console.log('Fetched post data:', post)
             console.log('Post baseRate from API:', post?.baseRate, typeof post?.baseRate)
@@ -170,6 +171,10 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     to: data?.toDate ? new Date(data.toDate) : undefined,
   })
 
+  // State for time selection when using per-hour packages
+  const [startTime, setStartTime] = useState<string | null>(null)
+  const [endTime, setEndTime] = useState<string | null>(null)
+
   // Helper function to get the appropriate package based on subscription status
   const getPackageForUser = (basePackageId: string, hasSubscription: boolean): string => {
     // Map free packages to their enhanced versions for subscribers
@@ -186,67 +191,6 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     
     // Otherwise return the base package
     return basePackageId
-  }
-
-  // Filter packages based on duration, season, and user subscription status
-  const getFilteredPackages = (): Record<string, EnhancedPackageDetails> => {
-    const allPackages = getPackageDetails()
-    const currentDate = new Date()
-    const currentMonth = currentDate.getMonth() + 1 // 1-12
-    
-    // Determine current season (simple logic - can be enhanced)
-    const getCurrentSeason = () => {
-      if (currentMonth >= 12 || currentMonth <= 2) return 'winter'
-      if (currentMonth >= 3 && currentMonth <= 5) return 'spring'
-      if (currentMonth >= 6 && currentMonth <= 8) return 'summer'
-      return 'autumn'
-    }
-    
-    const currentSeason = getCurrentSeason()
-    
-    // Define base packages that should be offered
-    const basePackages = ['per_night', 'three_nights', 'weekly', 'monthly', 'wine_package', 'luxury_night', 'hosted_3nights', 'hosted_weekly']
-    
-    const filteredPackages: Record<string, EnhancedPackageDetails> = {}
-    
-    basePackages.forEach(basePackageId => {
-      // Get the appropriate package for this user (enhanced if subscriber, basic if not)
-      const userPackageId = getPackageForUser(basePackageId, userHasSubscription)
-      let packageInfo = allPackages[userPackageId]
-      
-      // If the enhanced package doesn't exist, fall back to the base package
-      if (!packageInfo && userPackageId !== basePackageId) {
-        console.warn(`Enhanced package ${userPackageId} not found, falling back to ${basePackageId}`)
-        packageInfo = allPackages[basePackageId]
-      }
-      
-      if (!packageInfo) {
-        console.warn(`Package ${basePackageId} not found, skipping`)
-        return // Skip if package doesn't exist
-      }
-      
-      // Skip wine package from main selection
-      if (basePackageId === 'wine_package') return
-      
-      // Filter by duration
-      const minNights = packageInfo.minNights || 1
-      const maxNights = packageInfo.maxNights || 365
-      const withinDuration = selectedDuration >= minNights && selectedDuration <= maxNights
-      
-      // Filter by season
-      const seasonMatch = packageInfo.availableSeasons.includes('all') || 
-                         packageInfo.availableSeasons.includes(currentSeason)
-      
-      if (withinDuration && seasonMatch) {
-        // Use the actual package we found (might be fallback)
-        const actualPackageId = packageInfo.id || (userPackageId !== basePackageId && allPackages[basePackageId] ? basePackageId : userPackageId)
-        filteredPackages[actualPackageId] = packageInfo
-      }
-      
-      console.log(`Package ${basePackageId} -> ${userPackageId}: duration ${selectedDuration} vs ${minNights}-${maxNights}, within: ${withinDuration}, season: ${seasonMatch}`)
-    })
-    
-    return filteredPackages
   }
 
   // Get packages from the centralized system with proper post integration
@@ -269,10 +213,12 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     if (effectivePost?.packageTypes && Array.isArray(effectivePost.packageTypes) && effectivePost.packageTypes.length > 0) {
       const postPackages: Record<string, EnhancedPackageDetails> = {}
       effectivePost.packageTypes.forEach((pkg: any) => {
-        const packageKey = pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_')
-        // Use package price if it's a valid number, otherwise use post baseRate
-        const packagePrice = (typeof pkg.price === 'number' && !isNaN(pkg.price)) ? pkg.price : postBaseRate
-        console.log(`Package "${pkg.name}": price=${pkg.price}, using=${packagePrice}, baseRate=${postBaseRate}`)
+        const packageKey = pkg.id || pkg.templateId || pkg.name.toLowerCase().replace(/\s+/g, '_')
+        // Handle special case where price is 0 - use baseRate * multiplier instead
+        const packagePrice = (typeof pkg.price === 'number' && !isNaN(pkg.price) && pkg.price > 0) 
+          ? pkg.price 
+          : postBaseRate * (pkg.multiplier || 1)
+        console.log(`Package "${pkg.name}": price=${pkg.price}, multiplier=${pkg.multiplier}, using=${packagePrice}, baseRate=${postBaseRate}`)
         
         postPackages[packageKey] = {
           id: packageKey,
@@ -284,6 +230,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
             : [],
           revenueCatId: pkg.revenueCatId || packageKey,
           price: packagePrice, // Use package price if available, otherwise post baseRate
+          baseTemplate: pkg.baseTemplate || (pkg.name.toLowerCase().includes('hour') ? 'per_hour' : 'per_night'),
           minNights: pkg.minNights || 1,
           maxNights: pkg.maxNights || 365,
           availableSeasons: ['all'], // Default to all seasons
@@ -306,6 +253,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           features: pkg.features,
           revenueCatId: pkg.revenueCatId,
           price: postBaseRate, // Use the post's base rate for centralized packages
+          baseTemplate: pkg.baseTemplate,
           minNights: pkg.minNights || 1,
           maxNights: pkg.maxNights || 365,
           availableSeasons: ['all'], // Default to all seasons for now
@@ -340,7 +288,95 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     return defaultPackages
   }
 
+  // Filter packages based on duration, season, and user subscription status
+  const getFilteredPackages = (): Record<string, EnhancedPackageDetails> => {
+    const allPackages = getPackageDetails()
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth() + 1 // 1-12
+    
+    // Determine current season (simple logic - can be enhanced)
+    const getCurrentSeason = () => {
+      if (currentMonth >= 12 || currentMonth <= 2) return 'winter'
+      if (currentMonth >= 3 && currentMonth <= 5) return 'spring'
+      if (currentMonth >= 6 && currentMonth <= 8) return 'summer'
+      return 'autumn'
+    }
+    
+    const currentSeason = getCurrentSeason()
+    
+    // Define base packages that should be offered - use actual package IDs from the API
+    const basePackages = Object.keys(allPackages) // Use actual package keys from the fetched data
+    
+    const filteredPackages: Record<string, EnhancedPackageDetails> = {}
+    
+    basePackages.forEach(basePackageId => {
+      // Get the package info directly since we're using actual package IDs
+      const packageInfo = allPackages[basePackageId]
+      
+      if (!packageInfo) {
+        console.warn(`Package ${basePackageId} not found, skipping`)
+        return // Skip if package doesn't exist
+      }
+      
+      // Skip wine package from main selection (if there is one)
+      if (packageInfo.title.toLowerCase().includes('wine')) return
+      
+      // Filter by duration
+      const minNights = packageInfo.minNights || 1
+      const maxNights = packageInfo.maxNights || 365
+      // For hourly templates ignore night-based duration filter
+      const withinDuration = packageInfo.baseTemplate === 'per_hour' ? true : (selectedDuration >= minNights && selectedDuration <= maxNights)
+      
+      // Filter by season
+      const seasonMatch = packageInfo.availableSeasons.includes('all') || 
+                         packageInfo.availableSeasons.includes(currentSeason)
+      
+      if (withinDuration && seasonMatch) {
+        // Use the actual package we found (might be fallback)
+        const actualPackageId = packageInfo.id || basePackageId
+        filteredPackages[actualPackageId] = packageInfo
+        
+        console.log(`Package ${basePackageId} -> ${actualPackageId}: duration ${selectedDuration} vs ${minNights}-${maxNights}, within: ${withinDuration}, season: ${seasonMatch}`)
+      } else {
+        console.log(`Package ${basePackageId}: duration ${selectedDuration} vs ${minNights}-${maxNights}, within: ${withinDuration}, season: ${seasonMatch}`)
+      }
+    })
+    
+    return filteredPackages
+  }
+
   const packageDetails = getFilteredPackages()
+
+  // Reset time selection when switching away from hourly packages
+  React.useEffect(() => {
+    if (selectedPackage && packageDetails[selectedPackage]?.baseTemplate === 'per_hour') {
+      return
+    }
+    setStartTime(null)
+    setEndTime(null)
+  }, [selectedPackage, packageDetails])
+
+  // Hourly helpers - Must be defined after packageDetails but before early returns
+  const isHourlySelected = React.useMemo(() => {
+    return selectedPackage ? packageDetails[selectedPackage]?.baseTemplate === 'per_hour' : false
+  }, [selectedPackage, packageDetails])
+
+  const getSelectedHours = React.useCallback((): number => {
+    if (!isHourlySelected || !startTime || !endTime) return 1
+    const [sH = 0, sM = 0] = startTime.split(':').map(Number)
+    const [eH = 0, eM = 0] = endTime.split(':').map(Number)
+    const start = new Date()
+    start.setHours(sH, sM, 0, 0)
+    const end = new Date()
+    end.setHours(eH, eM, 0, 0)
+    let diffMs = end.getTime() - start.getTime()
+    if (diffMs <= 0) diffMs += 24 * 60 * 60 * 1000
+    const hours = diffMs / (1000 * 60 * 60)
+    return Math.max(1, Math.round(hours * 2) / 2)
+  }, [isHourlySelected, startTime, endTime])
+
+  const quantity = React.useMemo(() => (isHourlySelected ? getSelectedHours() : selectedDuration), [isHourlySelected, getSelectedHours, selectedDuration])
+  const unitLabel = isHourlySelected ? 'hour' : 'night'
 
   // Add helper text for filtered packages
   const getPackageFilterInfo = () => {
@@ -360,6 +396,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
   const getBestPackageForDuration = (duration: number, packages: Record<string, EnhancedPackageDetails>): string | null => {
     // Package priority for different durations
     const packagePreferences = [
+      { min: 1, max: 1, preferred: ['per_hour', 'per_night', 'luxury_night'] },
       { min: 1, max: 1, preferred: ['per_night', 'luxury_night'] },
       { min: 2, max: 3, preferred: ['three_nights', 'per_night', 'luxury_night'] },
       { min: 4, max: 6, preferred: ['three_nights', 'per_night', 'luxury_night'] },
@@ -552,7 +589,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
     // This is for packages not in RevenueCat or when RevenueCat is unavailable
     const packagePrice = selectedPackageDetails.price
     const multiplier = selectedPackageDetails.multiplier ?? 1.0
-    const calculatedPrice = packagePrice * multiplier * selectedDuration
+    const calculatedPrice = packagePrice * multiplier * (selectedPackageDetails.baseTemplate === 'per_hour' ? getSelectedHours() : selectedDuration)
     setPackagePrice(calculatedPrice)
     console.log('Using local package pricing:', { packagePrice, multiplier, duration: selectedDuration, total: calculatedPrice })
   }, [selectedPackage, offerings, selectedDuration, packageDetails, effectivePost?.baseRate])
@@ -580,16 +617,16 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           packageTotal = Number(product.price)
         } else {
           // Fallback to calculated pricing
-          packageTotal = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+          packageTotal = selectedPkg.price * selectedPkg.multiplier * (selectedPkg.baseTemplate === 'per_hour' ? getSelectedHours() : selectedDuration)
         }
       } else {
         // Use calculated pricing for local packages
-        packageTotal = selectedPkg.price * selectedPkg.multiplier * selectedDuration
+        packageTotal = selectedPkg.price * selectedPkg.multiplier * (selectedPkg.baseTemplate === 'per_hour' ? getSelectedHours() : selectedDuration)
       }
     }
     
     // Calculate wine package price if selected
-    const winePrice = isWineSelected && packageDetails.wine_package 
+    const winePrice = isWineSelected && packageDetails.wine_package && !isHourlySelected
       ? (packageDetails.wine_package.price * packageDetails.wine_package.multiplier * selectedDuration)
       : 0
       
@@ -705,7 +742,8 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           baseRate: (typeof effectivePost?.baseRate === 'number' && !isNaN(effectivePost.baseRate)) 
             ? effectivePost.baseRate 
             : 150, // Send the post's base rate for backend calculations with proper fallback
-          duration: selectedDuration,
+          duration: isHourlySelected ? getSelectedHours() : selectedDuration,
+          units: isHourlySelected ? 'hours' : 'nights',
           customer: user.id,
           packageType: selectedPackage,
           isWineSelected,
@@ -809,7 +847,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
           <div className="pt-12 pb-6">
             <div className="bg-muted p-6 rounded-lg border border-border mb-6 text-center md:hidden">
               <h2 className="text-2xl font-semibold mb-2">{formatPrice(calculateTotalPrice())}</h2>
-              <p className="text-base text-muted-foreground">{selectedDuration} nights total</p>
+              <p className="text-base text-muted-foreground">{quantity} {unitLabel}{quantity !== 1 ? 's' : ''} total</p>
               {isWineSelected && (
                 <p className="text-sm text-muted-foreground mt-1">Includes wine package add-on</p>
               )}
@@ -818,7 +856,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
             {/* Desktop summary - more detailed */}
             <div className="hidden md:block bg-muted p-6 rounded-lg border border-border mb-6 text-center">
               <h2 className="text-3xl font-semibold mb-2">{formatPrice(calculateTotalPrice())}</h2>
-              <p className="text-lg text-muted-foreground">Total for {selectedDuration} nights</p>
+              <p className="text-lg text-muted-foreground">Total for {quantity} {unitLabel}{quantity !== 1 ? 's' : ''}</p>
               {isWineSelected && (
                 <p className="text-sm text-muted-foreground mt-1">Includes wine package add-on</p>
               )}
@@ -872,18 +910,44 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col gap-4">
-                    <Calendar
-                      mode="range"
-                      selected={dateRange}
-                      numberOfMonths={2}
-                      className="max-w-md mx-auto"
-                      disabled={() => true}
-                    />
-                    <div className="text-muted-foreground text-sm text-center">
-                      {dateRange && dateRange.from && dateRange.to
-                        ? `From ${formatDateTime(dateRange.from.toISOString())} to ${formatDateTime(dateRange.to.toISOString())}`
-                        : 'Select a start and end date'}
-                    </div>
+                    {selectedPackage && packageDetails[selectedPackage as keyof typeof packageDetails]?.baseTemplate === 'per_hour' ? (
+                      <>
+                        <div className="flex justify-center gap-4">
+                          <Input
+                            type="time"
+                            value={startTime || ''}
+                            onChange={(e) => setStartTime(e.target.value)}
+                            className="w-32"
+                          />
+                          <Input
+                            type="time"
+                            value={endTime || ''}
+                            onChange={(e) => setEndTime(e.target.value)}
+                            className="w-32"
+                          />
+                        </div>
+                        <div className="text-muted-foreground text-sm text-center">
+                          {startTime && endTime
+                            ? `From ${startTime} to ${endTime}`
+                            : 'Select a start and end time'}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <Calendar
+                          mode="range"
+                          selected={dateRange}
+                          numberOfMonths={2}
+                          className="max-w-md mx-auto"
+                          disabled={() => true}
+                        />
+                        <div className="text-muted-foreground text-sm text-center">
+                          {dateRange && dateRange.from && dateRange.to
+                            ? `From ${formatDateTime(dateRange.from.toISOString())} to ${formatDateTime(dateRange.to.toISOString())}`
+                            : 'Select a start and end date'}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -941,18 +1005,19 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                   if (product.price) {
                     // RevenueCat package - fixed total price
                     const fixedTotal = Number(product.price)
-                    displayPrice = fixedTotal / selectedDuration // Show as "per night" for comparison
+                    const qtyForDisplay = pkg.baseTemplate === 'per_hour' ? getSelectedHours() : selectedDuration
+                    displayPrice = fixedTotal / qtyForDisplay // per-unit comparison
                     totalPrice = fixedTotal
                     isFixedPrice = true
                   } else {
                     // Fallback to calculated pricing
                     displayPrice = pkg.price * pkg.multiplier
-                    totalPrice = displayPrice * selectedDuration
+                    totalPrice = displayPrice * (pkg.baseTemplate === 'per_hour' ? getSelectedHours() : selectedDuration)
                   }
                 } else {
                   // Local package - calculated pricing
                   displayPrice = pkg.price * pkg.multiplier
-                  totalPrice = displayPrice * selectedDuration
+                  totalPrice = displayPrice * (pkg.baseTemplate === 'per_hour' ? getSelectedHours() : selectedDuration)
                 }
                 
                 return (
@@ -1016,7 +1081,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                               <span className="text-blue-600 font-medium">Fixed Total</span>
                             </div>
                             <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Avg per Night:</span>
+                              <span className="text-muted-foreground">Avg per {pkg.baseTemplate === 'per_hour' ? 'Hour' : 'Night'}:</span>
                               <span>{formatPrice(displayPrice)}</span>
                             </div>
                             <div className="flex items-center justify-between text-lg font-bold border-t pt-2 mt-2">
@@ -1036,11 +1101,11 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                               <span>{pkg.multiplier}x</span>
                             </div>
                             <div className="flex items-center justify-between text-sm font-medium border-t pt-2 mt-2">
-                              <span>Per Night:</span>
+                              <span>Per {pkg.baseTemplate === 'per_hour' ? 'Hour' : 'Night'}:</span>
                               <span className="text-primary">{formatPrice(displayPrice)}</span>
                             </div>
                             <div className="flex items-center justify-between text-lg font-bold">
-                              <span>Total ({selectedDuration} nights):</span>
+                              <span>Total ({pkg.baseTemplate === 'per_hour' ? getSelectedHours() : selectedDuration} {pkg.baseTemplate === 'per_hour' ? 'hours' : 'nights'}):</span>
                               <span className="text-primary">{formatPrice(totalPrice)}</span>
                             </div>
                           </>
@@ -1090,7 +1155,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
             {Object.keys(packageDetails).length === 0 && (
               <div className="text-center p-8 bg-amber-50 border border-amber-200 rounded-lg">
                 <h3 className="text-lg font-medium text-amber-800 mb-2">
-                  No packages available for {selectedDuration} nights
+                  No packages available for {quantity} {unitLabel}{quantity !== 1 ? 's' : ''}
                 </h3>
                 <p className="text-amber-700 text-sm mb-4">
                   The selected stay duration doesn&apos;t match any available packages. Try adjusting your dates or contact us for custom arrangements.
@@ -1137,7 +1202,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                         </CardTitle>
                         <CardDescription>{packageDetails.wine_package.description}</CardDescription>
                         <div className="mt-2 text-sm text-primary font-medium">
-                          +{formatPrice(packageDetails.wine_package.price * packageDetails.wine_package.multiplier)} per night
+                          +{formatPrice(packageDetails.wine_package.price * packageDetails.wine_package.multiplier)} per {unitLabel}
                         </div>
                       </div>
                       <Switch
@@ -1226,7 +1291,7 @@ export default function EstimateDetailsClientPage({ data, user }: Props) {
                 <span className="text-sm text-muted-foreground">total</span>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{selectedDuration} night{selectedDuration !== 1 ? 's' : ''}</span>
+                <span>{quantity} {unitLabel}{quantity !== 1 ? 's' : ''}</span>
                 {selectedPackage && packageDetails[selectedPackage] && (
                   <>
                     <span>•</span>

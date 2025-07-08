@@ -18,9 +18,9 @@ export async function POST(request: Request) {
       });
     }
 
-    const { postId, fromDate, toDate, guests, title, customer, packageType, total, duration: requestDuration } = body;
+    const { postId, fromDate, toDate, guests, title, customer, packageType, total, duration: requestDuration, startTime, endTime, hours, units } = body;
 
-    console.log('Destructured body fields:', { postId, fromDate, toDate, guests, title, customer, packageType, total, requestDuration });
+    console.log('Destructured body fields:', { postId, fromDate, toDate, guests, title, customer, packageType, total, requestDuration, startTime, endTime, hours, units });
 
     // Validate required fields
     if (!postId) {
@@ -70,12 +70,14 @@ export async function POST(request: Request) {
           });
         }
         postData = post.docs[0];
-        postRef = postData.id;
-        // Use proper fallback logic - only use 150 if baseRate is null, undefined, or NaN
-        baseRate = (typeof postData.baseRate === 'number' && !isNaN(postData.baseRate)) 
-          ? postData.baseRate 
-          : 150;
-        console.log('Found post by slug, baseRate:', baseRate, 'from postData.baseRate:', postData.baseRate);
+        if (postData) {
+          postRef = postData.id;
+          // Use proper fallback logic - only use 150 if baseRate is null, undefined, or NaN
+          baseRate = (typeof postData.baseRate === 'number' && !isNaN(postData.baseRate)) 
+            ? postData.baseRate 
+            : 150;
+          console.log('Found post by slug, baseRate:', baseRate, 'from postData.baseRate:', postData.baseRate);
+        }
       } catch (postError) {
         console.error('Error finding post by slug:', postError);
         return new Response(JSON.stringify({ error: 'Error finding post' }), { 
@@ -172,7 +174,7 @@ export async function POST(request: Request) {
         limit: 1,
       });
       
-      if (existing.docs.length) {
+      if (existing.docs.length && existing.docs[0]) {
         console.log('Existing estimate found, updating:', existing.docs[0].id);
         // Update the existing estimate with the new total and other fields
         const updated = await payload.update({
@@ -185,6 +187,10 @@ export async function POST(request: Request) {
             toDate,
             customer: customerId,
             packageType: packageType || 'standard',
+            ...(startTime && { startTime }),
+            ...(endTime && { endTime }),
+            ...(duration !== undefined && { duration }),
+            ...(units && { units }),
           },
         });
         console.log('Estimate updated successfully:', updated.id);
@@ -213,6 +219,10 @@ export async function POST(request: Request) {
           total: calculatedTotal,
           customer: customerId,
           packageType: packageType || 'standard',
+          ...(startTime && { startTime }),
+          ...(endTime && { endTime }),
+          ...(duration !== undefined && { duration }),
+          ...(units && { units }),
         },
       });
 

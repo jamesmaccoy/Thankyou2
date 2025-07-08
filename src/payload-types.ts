@@ -507,6 +507,22 @@ export interface Estimate {
   fromDate: string;
   toDate: string;
   packageType?: string | null;
+  /**
+   * Start time for hourly bookings (HH:MM format)
+   */
+  startTime?: string | null;
+  /**
+   * End time for hourly bookings (HH:MM format)
+   */
+  endTime?: string | null;
+  /**
+   * Duration in hours or nights
+   */
+  duration?: number | null;
+  /**
+   * Whether duration is in hours or nights
+   */
+  units?: ('hours' | 'nights') | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1258,6 +1274,10 @@ export interface EstimatesSelect<T extends boolean = true> {
   fromDate?: T;
   toDate?: T;
   packageType?: T;
+  startTime?: T;
+  endTime?: T;
+  duration?: T;
+  units?: T;
   updatedAt?: T;
   createdAt?: T;
 }

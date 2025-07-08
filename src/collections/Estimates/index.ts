@@ -402,6 +402,63 @@ export const Estimate: CollectionConfig = {
         position: 'sidebar',
       },
     },
+    // Time-related fields for hourly bookings
+    {
+      name: 'startTime',
+      type: 'text',
+      required: false,
+      label: 'Start Time',
+      admin: {
+        position: 'sidebar',
+        description: 'Start time for hourly bookings (HH:MM format)',
+      },
+      access: {
+        update: isHostField,
+      },
+    },
+    {
+      name: 'endTime',
+      type: 'text',
+      required: false,
+      label: 'End Time',
+      admin: {
+        position: 'sidebar',
+        description: 'End time for hourly bookings (HH:MM format)',
+      },
+      access: {
+        update: isHostField,
+      },
+    },
+    {
+      name: 'duration',
+      type: 'number',
+      required: false,
+      label: 'Duration',
+      admin: {
+        position: 'sidebar',
+        description: 'Duration in hours or nights',
+      },
+      access: {
+        update: isHostField,
+      },
+    },
+    {
+      name: 'units',
+      type: 'select',
+      required: false,
+      label: 'Duration Units',
+      options: [
+        { label: 'Hours', value: 'hours' },
+        { label: 'Nights', value: 'nights' },
+      ],
+      admin: {
+        position: 'sidebar',
+        description: 'Whether duration is in hours or nights',
+      },
+      access: {
+        update: isHostField,
+      },
+    },
   ],
   hooks: {
     beforeChange: [
