@@ -76,10 +76,24 @@ interface PackageFormProps {
 }
 
 // Package Mapping Visualization Component
-function PackageMappingVisualization({ userEntitlements, packageTypes = [] }: { userEntitlements: string[]; packageTypes?: PackageType[] }) {
+function PackageMappingVisualization({ userEntitlements, packageTypes = [], onPackageToggle, onSwitchToEdit }: { 
+  userEntitlements: string[]; 
+  packageTypes?: PackageType[];
+  onPackageToggle?: (baseTemplate: string, enabled: boolean) => void;
+  onSwitchToEdit?: () => void;
+}) {
   const userTier = getUserTierFromEntitlements(userEntitlements)
   const availablePackages = getAvailablePackagesForUser(userEntitlements)
   const baseTemplates: BaseTemplate[] = ['per_night', 'per_hour', 'three_nights', 'weekly', 'monthly', 'wine_package']
+
+  // Check which base templates are currently enabled (have matching packages in packageTypes)
+  const isTemplateEnabled = (baseTemplate: string) => {
+    const selectedPackage = getPackageTemplateForUser(baseTemplate as BaseTemplate, userEntitlements)
+    return packageTypes.some(pkg => pkg.revenueCatId === selectedPackage)
+  }
+
+  // Get the enabled templates count
+  const enabledTemplatesCount = baseTemplates.filter(isTemplateEnabled).length
 
   // Stats based on current packageTypes
   const totalAddons = packageTypes.length
@@ -96,16 +110,29 @@ function PackageMappingVisualization({ userEntitlements, packageTypes = [] }: { 
 
   return (
     <>
-      {/* Package Dashboard Stats (within mapping preview) */}
+      {/* Package Dashboard Stats */}
       <Card className="p-4 mb-6">
         <CardHeader className="p-0 mb-4">
-          <CardTitle className="text-base">Package Overview</CardTitle>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>Package Overview</span>
+            {onSwitchToEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSwitchToEdit}
+                className="gap-2"
+              >
+                <Settings className="h-4 w-4" />
+                Configure Add-ons
+              </Button>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{totalAddons}</div>
-              <div className="text-sm text-muted-foreground">Total Add-ons</div>
+              <div className="text-2xl font-bold text-blue-600">{enabledTemplatesCount}</div>
+              <div className="text-sm text-muted-foreground">Active Templates</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{freeAddons}</div>
@@ -117,7 +144,7 @@ function PackageMappingVisualization({ userEntitlements, packageTypes = [] }: { 
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-amber-600">{revenueCatAddons}</div>
-              <div className="text-sm text-muted-foreground">With RevenueCat</div>
+              <div className="text-sm text-muted-foreground">Total Add-ons</div>
             </div>
           </div>
         </CardContent>
@@ -127,50 +154,223 @@ function PackageMappingVisualization({ userEntitlements, packageTypes = [] }: { 
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Package Mapping for Your Tier
+            Quick Package Control
           </CardTitle>
           <CardDescription>
-            Based on your entitlements: {userEntitlements.length > 0 ? userEntitlements.join(', ') : 'None'}
+            Your subscription tier: <Badge className={cn("ml-1", tierColors[userTier])}>{userTier.toUpperCase()}</Badge>
+            {userEntitlements.length > 0 && (
+              <span className="block mt-1 text-xs">
+                Entitlements: {userEntitlements.join(', ')}
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-sm font-medium">Your Tier:</span>
-              <Badge className={tierColors[userTier]}>{userTier.toUpperCase()}</Badge>
-            </div>
-            
             <div className="grid gap-3">
               {baseTemplates.map(baseTemplate => {
                 const selectedPackage = getPackageTemplateForUser(baseTemplate, userEntitlements)
                 const packageInfo = getPackageById(selectedPackage)
+                const isEnabled = isTemplateEnabled(baseTemplate)
+                const matchingAddon = packageTypes.find(pkg => pkg.revenueCatId === selectedPackage)
                 
                 return (
-                  <div key={baseTemplate} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={baseTemplate} className={cn(
+                    "flex items-center justify-between p-4 border rounded-lg transition-all",
+                    isEnabled ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"
+                  )}>
                     <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                      <span className="font-medium capitalize">{baseTemplate.replace('_', ' ')}</span>
+                      <div className={cn(
+                        "w-3 h-3 rounded-full transition-colors",
+                        isEnabled ? "bg-green-500" : "bg-gray-300"
+                      )}></div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium capitalize">{baseTemplate.replace('_', ' ')}</span>
+                          {isEnabled && (
+                            <Badge variant="outline" className="bg-green-100 text-green-800 text-xs">
+                              Active
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Available package: <span className="font-medium">{packageInfo?.name || selectedPackage}</span>
+                          {packageInfo?.revenueCatId && (
+                            <span className="text-xs ml-1">({packageInfo.revenueCatId})</span>
+                          )}
+                        </div>
+                        {isEnabled && matchingAddon && (
+                          <div className="text-xs text-green-700 mt-1">
+                            Price: {matchingAddon.price === 0 ? 'Free' : 
+                                   matchingAddon.price === '' ? 'Uses base rate' : 
+                                   `$${matchingAddon.price}`} • 
+                            Features: {matchingAddon.features.length}
+                          </div>
+                        )}
+                      </div>
                     </div>
+                    
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">→</span>
-                      <Badge variant="outline">{packageInfo?.name || selectedPackage}</Badge>
-                      {packageInfo?.revenueCatId && (
-                        <span className="text-xs text-gray-500">({packageInfo.revenueCatId})</span>
-                      )}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "gap-2 min-w-[100px]",
+                              isEnabled ? "bg-green-100 hover:bg-green-200" : ""
+                            )}
+                          >
+                            {isEnabled ? (
+                              <>
+                                <Check className="h-4 w-4" />
+                                Enabled
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4" />
+                                Enable
+                              </>
+                            )}
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-0" align="end">
+                          <div className="p-3 border-b">
+                            <h4 className="font-medium text-sm capitalize">
+                              {baseTemplate.replace('_', ' ')} Package
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              Available for your {userTier} tier
+                            </p>
+                          </div>
+                          <div className="p-1">
+                            {isEnabled ? (
+                              <>
+                                <div className="p-3 space-y-2">
+                                  <div className="flex items-center gap-2 text-green-700">
+                                    <Check className="h-4 w-4" />
+                                    <span className="text-sm font-medium">Currently Active</span>
+                                  </div>
+                                  {matchingAddon && (
+                                    <div className="text-xs space-y-1 text-muted-foreground">
+                                      <div>• {matchingAddon.description}</div>
+                                      <div>• Price: {matchingAddon.price === 0 ? 'Free' : 
+                                                           matchingAddon.price === '' ? 'Uses base rate' : 
+                                                           `$${matchingAddon.price}`}</div>
+                                      <div>• {matchingAddon.features.length} features included</div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="border-t p-1">
+                                  <div 
+                                    className="flex items-center gap-2 p-2 hover:bg-accent rounded-sm cursor-pointer transition-colors text-destructive"
+                                    onClick={() => {
+                                      if (onPackageToggle) {
+                                        onPackageToggle(baseTemplate, false)
+                                        toast.success(`Disabled ${baseTemplate.replace('_', ' ')} package`)
+                                      }
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                    <span className="text-sm">Disable Package</span>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="p-3 space-y-2">
+                                  <div className="text-sm text-muted-foreground">
+                                    This will add the <strong>{packageInfo?.name}</strong> package to your add-ons.
+                                  </div>
+                                  {packageInfo && (
+                                    <div className="text-xs space-y-1 text-muted-foreground">
+                                      <div>• {packageInfo.description}</div>
+                                      <div>• Multiplier: {packageInfo.multiplier}x</div>
+                                      <div>• {packageInfo.features.length} features included</div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="border-t p-1">
+                                  <div 
+                                    className="flex items-center gap-2 p-2 hover:bg-accent rounded-sm cursor-pointer transition-colors text-green-700"
+                                    onClick={() => {
+                                      if (onPackageToggle) {
+                                        onPackageToggle(baseTemplate, true)
+                                        toast.success(`Enabled ${baseTemplate.replace('_', ' ')} package`)
+                                      }
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                    <span className="text-sm">Enable Package</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                 )
               })}
             </div>
 
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>How it works:</strong> When you add a template, the system automatically selects the best package variant for your subscription tier. 
-                {userTier === 'guest' && ' Upgrade your subscription to access enhanced packages!'}
-                {userTier === 'standard' && ' You have access to standard packages.'}
-                {userTier === 'pro' && ' You have access to enhanced customer packages!'}
-                {userTier === 'luxury' && ' You have access to all luxury packages!'}
-              </p>
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-blue-100">
+                  <Package className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-blue-900 mb-1">Package System</h4>
+                  <p className="text-sm text-blue-800 mb-3">
+                    Enable/disable packages above for quick control. Each template automatically maps to the best package for your 
+                    <Badge className={cn("mx-1", tierColors[userTier])}>{userTier.toUpperCase()}</Badge>
+                    subscription tier.
+                  </p>
+                  {enabledTemplatesCount === 0 && (
+                    <div className="p-2 bg-amber-100 rounded border border-amber-200 mb-3">
+                      <p className="text-sm text-amber-800">
+                        ⚠️ No packages are currently enabled. Enable at least one package to allow bookings.
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (onSwitchToEdit) {
+                          onSwitchToEdit()
+                        }
+                      }}
+                      className="gap-2 bg-white"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Configure Add-on Details
+                    </Button>
+                    {enabledTemplatesCount > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // Disable all templates
+                          baseTemplates.forEach(template => {
+                            if (isTemplateEnabled(template) && onPackageToggle) {
+                              onPackageToggle(template, false)
+                            }
+                          })
+                          toast.success('Disabled all packages')
+                        }}
+                        className="gap-2 bg-white text-destructive border-destructive/20 hover:bg-destructive/5"
+                      >
+                        <X className="h-4 w-4" />
+                        Disable All
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -2298,7 +2498,24 @@ function PostForm({
 
               {/* Package Mapping Section */}
               <div className={cn("space-y-4", previewMode !== 'mapping' && "hidden")}>
-                <PackageMappingVisualization userEntitlements={userEntitlements} packageTypes={formData.packageTypes} />
+                <PackageMappingVisualization 
+                  userEntitlements={userEntitlements} 
+                  packageTypes={formData.packageTypes}
+                  onPackageToggle={(baseTemplate: string, enabled: boolean) => {
+                    if (enabled) {
+                      // Enable package - add the appropriate template
+                      onAddPackageTemplate(baseTemplate)
+                    } else {
+                      // Disable package - remove packages with matching revenueCatId
+                      const selectedPackage = getPackageTemplateForUser(baseTemplate as BaseTemplate, userEntitlements)
+                      const newPackageTypes = formData.packageTypes.filter(pkg => pkg.revenueCatId !== selectedPackage)
+                      updateFormData({ packageTypes: newPackageTypes })
+                    }
+                  }}
+                  onSwitchToEdit={() => {
+                    setPackageMode('edit')
+                  }}
+                />
               </div>
 
               {/* Templates Section */}
