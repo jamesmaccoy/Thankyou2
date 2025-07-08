@@ -94,30 +94,35 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
 
   // Helper function to filter packages based on user entitlements
   const filterPackagesByEntitlements = (packages: PackageTier[]): PackageTier[] => {
-    if (!currentUser) {
-      // Guest users only get basic packages
-      return packages.filter(pkg => 
-        pkg.baseTemplate === 'per_hour' || 
-        pkg.baseTemplate === 'per_night' || 
-        pkg.baseTemplate === 'three_nights'
-      )
-    }
-
     return packages.filter(pkg => {
-      // For each package, check if user has access based on their tier
-      const packageId = getPackageForUserTier(pkg.baseTemplate, userTier)
+      // Get what packages the user is entitled to based on their tier
+      const userAvailablePackages = getAvailablePackagesForUser(entitlements)
       
-      // If user has the appropriate package for this tier, include it
-      if (packageId && availablePackages[packageId]) {
-        return true
+      // Check if this is a package from post data with a specific name
+      const isNamedPackage = pkg.title && pkg.title !== pkg.baseTemplate
+      
+      if (isNamedPackage) {
+        // For named packages (like "Per Hour (Pro)"), check if the name indicates a tier requirement
+        const packageName = pkg.title.toLowerCase()
+        
+        // Check if package name indicates it requires Pro or higher tier
+        if (packageName.includes('pro') || packageName.includes('premium') || packageName.includes('customer')) {
+          return userTier === 'pro' || userTier === 'luxury'
+        }
+        
+        // Check if package name indicates it requires Luxury tier
+        if (packageName.includes('luxury') || packageName.includes('hosted') || packageName.includes('vip')) {
+          return userTier === 'luxury'
+        }
+        
+        // For standard named packages, check if user has access to the base template
+        const appropriatePackageId = getPackageForUserTier(pkg.baseTemplate, userTier)
+        return appropriatePackageId && userAvailablePackages[appropriatePackageId]
+      } else {
+        // For base template packages, check if user has access
+        const appropriatePackageId = getPackageForUserTier(pkg.baseTemplate, userTier)
+        return appropriatePackageId && userAvailablePackages[appropriatePackageId]
       }
-      
-      // Also allow basic packages for all authenticated users
-      if (pkg.baseTemplate === 'per_hour' || pkg.baseTemplate === 'per_night') {
-        return true
-      }
-      
-      return false
     })
   }
 
