@@ -304,6 +304,9 @@ export interface Post {
          */
         templateId?:
           | (
+              | 'per_hour_guest'
+              | 'per_hour'
+              | 'per_hour_luxury'
               | 'per_night'
               | 'luxury_night'
               | 'three_nights'
@@ -315,8 +318,6 @@ export interface Post {
               | 'three_nights_customer'
               | 'weekly_customer'
               | 'monthly'
-              | 'per_hour_guest'
-              | 'per_hour'
             )
           | null;
         /**

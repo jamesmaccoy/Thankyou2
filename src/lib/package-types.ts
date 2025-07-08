@@ -50,18 +50,19 @@ export interface PackageType {
   revenueCatId: string
   minNights?: number
   maxNights?: number
+  hours?: number
   isHosted?: boolean
   category: 'standard' | 'luxury' | 'hosted' | 'specialty'
   icon: string
   tier: 'standard' | 'pro' | 'luxury'
-  baseTemplate: 'per_night' | 'per_hour' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
+  baseTemplate: 'per_hour' | 'per_night' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
   durationVariant?: string
 }
 
 export interface PackageTypeTemplate extends PackageType {}
 
 // Base templates for organizing packages
-export type BaseTemplate = 'per_night' | 'per_hour' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
+export type BaseTemplate = 'per_hour' | 'per_night' | 'three_nights' | 'weekly' | 'monthly' | 'wine_package'
 
 // User tiers for package access
 export type UserTier = 'guest' | 'standard' | 'pro' | 'luxury'
@@ -79,6 +80,69 @@ export interface PackageMapping {
 
 // Centralized package types definition based on Plek's core offerings
 export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
+    // Standard Packages
+  per_hour_guest: {
+    name: "Per Hour",
+    description: "Hourly access for guests / standard tier",
+    multiplier: 0.15,
+    features: [
+      "Photo studio access (per hour)",
+      "Basic lighting equipment",
+      "Self-service setup"
+    ],
+    revenueCatId: "per_hour_guest",
+    minNights: 0,
+    maxNights: 0,
+    category: 'standard',
+    icon: 'clock',
+    tier: 'standard',
+    baseTemplate: 'per_hour'
+  },
+
+  // Pro-tier Hourly Package
+  per_hour: {
+    name: "Per Hour (Pro)",
+    description: "Hourly access with priority support (pro tier)",
+    multiplier: 0.12,
+    features: [
+      "Photo studio access (per hour)",
+      "Premium lighting equipment",
+      "Priority booking support",
+      "Enhanced cleaning service"
+    ],
+    revenueCatId: "per_hour",
+    minNights: 0,
+    maxNights: 0,
+    category: 'standard',
+    icon: 'clock',
+    tier: 'pro',
+    baseTemplate: 'per_hour'
+  },
+
+  // Luxury-tier Hourly Package
+  per_hour_luxury: {
+    name: "Per Hour (Luxury)",
+    description: "Premium hourly access with dedicated host support",
+    multiplier: 0.18,
+    features: [
+      "Photo studio access (per hour)",
+      "Professional lighting setup",
+      "Dedicated host assistance",
+      "Premium equipment access",
+      "Priority booking",
+      "Concierge service",
+      "Enhanced amenities"
+    ],
+    revenueCatId: "per_hour_luxury",
+    minNights: 0,
+    maxNights: 0,
+    isHosted: true,
+    category: 'luxury',
+    icon: 'crown',
+    tier: 'luxury',
+    baseTemplate: 'per_hour'
+  },
+
   // Standard Packages
   per_night: {
     name: "Per Night",
@@ -234,7 +298,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
 
   // Customer (Paid) Packages - Enhanced versions with premium features
   per_night_customer: {
-    name: "Per Night (Enhanced)",
+    name: "Per Night (Pro)",
     description: "Enhanced nightly experience with priority support and premium amenities",
     multiplier: 1.0,
     features: [
@@ -331,44 +395,7 @@ export const PACKAGE_TYPES: Record<string, PackageTypeTemplate> = {
     baseTemplate: 'monthly'
   },
 
-  // Standard Packages
-  per_hour_guest: {
-    name: "Per Hour (Standard)",
-    description: "Hourly access for guests / standard tier",
-    multiplier: 0.15,
-    features: [
-      "Photo studio access (per hour)",
-      "Basic lighting equipment",
-      "Self-service setup"
-    ],
-    revenueCatId: "per_hour_guest",
-    minNights: 0,
-    maxNights: 0,
-    category: 'standard',
-    icon: 'clock',
-    tier: 'standard',
-    baseTemplate: 'per_hour'
-  },
 
-  // Pro-tier Hourly Package
-  per_hour: {
-    name: "Per Hour (Pro)",
-    description: "Hourly access with priority support (pro tier)",
-    multiplier: 0.12,
-    features: [
-      "Photo studio access (per hour)",
-      "Premium lighting equipment",
-      "Priority booking support",
-      "Enhanced cleaning service"
-    ],
-    revenueCatId: "per_hour",
-    minNights: 0,
-    maxNights: 0,
-    category: 'standard',
-    icon: 'clock',
-    tier: 'pro',
-    baseTemplate: 'per_hour'
-  }
 } as const
 
 // Comprehensive package mapping for all base templates and tiers
@@ -435,6 +462,10 @@ export const PACKAGE_MAPPINGS: PackageMapping = {
     pro: {
       packageId: 'per_hour',
       revenueCatId: 'per_hour'
+    },
+    luxury: {
+      packageId: 'per_hour_luxury',
+      revenueCatId: 'per_hour_luxury'
     }
   }
 }
