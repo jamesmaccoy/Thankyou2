@@ -24,6 +24,7 @@ import {
   getUserTierFromEntitlements, 
   getPackageForUserTier,
   PACKAGE_TYPES,
+  getPackageIconComponent,
   type BaseTemplate,
   type UserTier,
   type PackageTypeTemplate
@@ -454,33 +455,6 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
           </div>
         )}
         
-        {/* Package Selection */}
-        <div className="flex flex-col space-y-3">
-          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Package Type</label>
-          <div className="space-y-2">
-            {packageTiers.map((tier) => (
-              <Button
-                key={tier.id}
-                variant={currentTier?.id === tier.id ? "default" : "outline"}
-                className="h-auto p-3 flex flex-col items-center text-center"
-                onClick={() => {
-                  setCurrentTier(tier);
-                }}
-              >
-                <span className="font-medium">{tier.title}</span>
-                {tier.baseTemplate !== 'per_hour' && (
-                  <span className="text-sm text-muted-foreground">
-                    {tier.minNights === tier.maxNights 
-                      ? `${tier.minNights} night${tier.minNights !== 1 ? 's' : ''}`
-                      : `${tier.minNights}-${tier.maxNights} nights`
-                    }
-                  </span>
-                )}
-              </Button>
-            ))}
-          </div>
-        </div>
-        
         {/* Date/Time Selection - Conditional based on package type */}
         <div className="flex flex-col space-y-3">
           {isHourlySelected ? (
@@ -614,6 +588,31 @@ export const EstimateBlock: React.FC<EstimateBlockProps> = ({ className, baseRat
           )}
         </div>
 
+        {/* Package Selection - Now positioned after Select Dates */}
+        <div className="flex flex-col space-y-3">
+          <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Select Package Type</label>
+          <div className="flex flex-wrap gap-2">
+            {packageTiers.map((tier) => {
+              // Get the icon component for this package type
+              const IconComponent = getPackageIconComponent(tier.id)
+              
+              return (
+                <Button
+                  key={tier.id}
+                  variant={currentTier?.id === tier.id ? "default" : "outline"}
+                  className="h-auto p-3 flex items-center gap-2 text-left"
+                  onClick={() => {
+                    setCurrentTier(tier);
+                  }}
+                >
+                  <IconComponent className="h-4 w-4 flex-shrink-0" />
+                  <span className="font-medium">{tier.title}</span>
+                </Button>
+              )
+            })}
+          </div>
+        </div>
+        
         {/* Package Information - Only show when dates are selected */}
         {((startDate && endDate && !isHourlySelected) || (startDate && startTime && endTime && isHourlySelected)) && (
           <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
